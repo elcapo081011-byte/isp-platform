@@ -114,7 +114,7 @@ npm test
 apps/backend        NestJS — API REST modular (18 módulos)
 apps/frontend        React + Vite + Tailwind
 packages/database     Prisma schema, migraciones, seed
-packages/network-drivers   Interfaces RouterProvider / OltProvider + mocks
+apps/backend/src/network-drivers   Interfaces RouterProvider / OltProvider + mocks
 infrastructure/       Docker, Nginx
 docs/                 Arquitectura, producción, seguridad, roadmap, portal del cliente
 ```
