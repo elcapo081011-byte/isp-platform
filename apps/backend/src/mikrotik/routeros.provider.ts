@@ -6,7 +6,7 @@ import {
   ConnectionStatus,
   RouterSystemInfo,
   PppoeSessionInfo,
-} from '../../../../packages/network-drivers/src/router-provider.interface';
+} from '../network-drivers/router-provider.interface';
 import { CredentialsEncryptionService } from '../common/crypto/credentials-encryption.service';
 
 /**

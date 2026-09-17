@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as snmp from 'net-snmp';
 import {
   OltProvider, OltCredentials, OltPonPortStatus, OnuStatusInfo, NotSupportedByDriverError,
-} from '../../../../packages/network-drivers/src/olt-provider.interface';
-import { ConnectionStatus } from '../../../../packages/network-drivers/src/router-provider.interface';
+} from '../network-drivers/olt-provider.interface';
+import { ConnectionStatus } from '../network-drivers/router-provider.interface';
 
 // OIDs estándar de MIB-II (RFC 1213) — universales, no dependen del fabricante.
 const OID_SYS_DESCR = '1.3.6.1.2.1.1.1.0';

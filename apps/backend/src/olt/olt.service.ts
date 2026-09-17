@@ -2,8 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { GenericSnmpOltProvider } from './generic-snmp-olt.provider';
-import { MockOltProvider } from '../../../../packages/network-drivers/src/mock/mock-providers';
-import { NotSupportedByDriverError } from '../../../../packages/network-drivers/src/olt-provider.interface';
+import { MockOltProvider } from '../network-drivers/mock/mock-providers';
+import { NotSupportedByDriverError } from '../network-drivers/olt-provider.interface';
 import { CreateOltDto, RegisterOnuDto } from './dto/olt.dto';
 
 const mockProvider = new MockOltProvider();

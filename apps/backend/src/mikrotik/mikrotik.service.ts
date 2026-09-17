@@ -4,7 +4,7 @@ import { AuditService } from '../common/audit/audit.service';
 import { CredentialsEncryptionService } from '../common/crypto/credentials-encryption.service';
 import { RouterOsProvider } from './routeros.provider';
 import { CreateRouterDto } from './dto/router.dto';
-import { RouterCredentials } from '../../../../packages/network-drivers/src/router-provider.interface';
+import { RouterCredentials } from '../network-drivers/router-provider.interface';
 
 /**
  * Cada ISP (organización) registra y administra sus PROPIOS routers desde
