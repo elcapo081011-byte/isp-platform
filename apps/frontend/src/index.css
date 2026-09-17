@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-base text-ink font-body antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  /* Panel de estado: el borde izquierdo codifica la severidad en vez de
+     usar el mismo shadow-de-tarjeta genérico en todo. */
+  .status-panel {
+    @apply bg-surface border border-border border-l-[3px] rounded-md p-5;
+  }
+  .status-panel--ok { @apply border-l-ok; }
+  .status-panel--warn { @apply border-l-warn; }
+  .status-panel--critical { @apply border-l-critical; }
+  .status-panel--neutral { @apply border-l-border; }
+}
