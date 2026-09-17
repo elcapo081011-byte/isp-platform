@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import { api } from '../lib/api';
 import { Customer } from '../lib/types';
@@ -7,9 +7,10 @@ import { StatusBadge } from '../components/StatusBadge';
 
 export function CustomersListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(searchParams.get('status') ?? '');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

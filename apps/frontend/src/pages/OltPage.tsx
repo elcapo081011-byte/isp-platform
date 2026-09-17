@@ -3,6 +3,7 @@ import { Plus, X, RefreshCw, Wifi, WifiOff, PlusCircle, Power, PowerOff } from '
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Olt, Onu, PonPort } from '../lib/types';
+import { useToast } from '../components/Toast';
 
 const VENDORS = [
   { value: 'HUAWEI', label: 'Huawei' },
@@ -39,6 +40,7 @@ export function OltPage() {
   const [onuForm, setOnuForm] = useState(EMPTY_ONU_FORM);
   const [savingOnu, setSavingOnu] = useState(false);
   const [onuError, setOnuError] = useState<string | null>(null);
+  const toast = useToast();
 
   async function loadOlts() {
     setLoading(true);
@@ -98,6 +100,7 @@ export function OltPage() {
         location: oltForm.location || undefined,
       });
       setOltModalOpen(false);
+      toast.success('OLT agregada.');
       await loadOlts();
     } catch (err: any) {
       setOltError(err?.response?.data?.message ?? 'No se pudo guardar la OLT.');
@@ -126,6 +129,7 @@ export function OltPage() {
         model: onuForm.model || undefined,
       });
       setOnuModalOpen(false);
+      toast.success('ONU registrada.');
       await selectOlt(selected);
     } catch (err: any) {
       setOnuError(err?.response?.data?.message ?? 'No se pudo registrar la ONU.');

@@ -1,14 +1,15 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 export function CustomersListPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [items, setItems] = useState([]);
     const [search, setSearch] = useState('');
-    const [status, setStatus] = useState('');
+    const [status, setStatus] = useState(searchParams.get('status') ?? '');
     const [loading, setLoading] = useState(true);
     useEffect(() => {
         const timeout = setTimeout(() => {

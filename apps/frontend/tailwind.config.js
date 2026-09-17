@@ -16,8 +16,8 @@ export default {
         muted: '#7C8792',
         ink: '#E7ECF1',
         signal: {
-          DEFAULT: '#1FB6A6',
-          dim: '#164F49',
+          DEFAULT: 'var(--signal, #1FB6A6)',
+          dim: 'var(--signal-dim, #164F49)',
         },
         warn: '#E8A23D',
         critical: '#E1554F',

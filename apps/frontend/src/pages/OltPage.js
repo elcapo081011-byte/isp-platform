@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Plus, X, RefreshCw, Wifi, WifiOff, PlusCircle, Power, PowerOff } from 'lucide-react';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
+import { useToast } from '../components/Toast';
 const VENDORS = [
     { value: 'HUAWEI', label: 'Huawei' },
     { value: 'ZTE', label: 'ZTE' },
@@ -33,6 +34,7 @@ export function OltPage() {
     const [onuForm, setOnuForm] = useState(EMPTY_ONU_FORM);
     const [savingOnu, setSavingOnu] = useState(false);
     const [onuError, setOnuError] = useState(null);
+    const toast = useToast();
     async function loadOlts() {
         setLoading(true);
         try {
@@ -89,6 +91,7 @@ export function OltPage() {
                 location: oltForm.location || undefined,
             });
             setOltModalOpen(false);
+            toast.success('OLT agregada.');
             await loadOlts();
         }
         catch (err) {
@@ -118,6 +121,7 @@ export function OltPage() {
                 model: onuForm.model || undefined,
             });
             setOnuModalOpen(false);
+            toast.success('ONU registrada.');
             await selectOlt(selected);
         }
         catch (err) {

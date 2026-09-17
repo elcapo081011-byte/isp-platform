@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity } from 'lucide-react';
 import { api } from '../lib/api';
 import { Router } from '../lib/types';
+import { useToast } from '../components/Toast';
 
 const EMPTY_FORM = {
   name: '',
@@ -36,6 +37,7 @@ export function MikrotikPage() {
   const [sessions, setSessions] = useState<any[] | null>(null);
   const [systemInfo, setSystemInfo] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const toast = useToast();
 
   async function load() {
     setLoading(true);
@@ -82,6 +84,7 @@ export function MikrotikPage() {
         location: form.location || undefined,
       });
       setModalOpen(false);
+      toast.success('Router agregado. Verificando conexión…');
       await load();
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'No se pudo guardar el router. Verifica los datos de conexión.');

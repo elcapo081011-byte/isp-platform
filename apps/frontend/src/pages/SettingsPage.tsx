@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useUIStore, ACCENT_OPTIONS } from '../store/ui.store';
+import { useToast } from '../components/Toast';
 
 export function SettingsPage() {
   const [graceDays, setGraceDays] = useState('3');
   const [notifyDays, setNotifyDays] = useState('3');
   const [rxWarn, setRxWarn] = useState('-25');
   const [rxCritical, setRxCritical] = useState('-28');
-  const [saved, setSaved] = useState(false);
+  const accent = useUIStore((s) => s.accent);
+  const setAccent = useUIStore((s) => s.setAccent);
+  const toast = useToast();
 
   useEffect(() => {
     api.get('/settings').then((res) => {
@@ -18,16 +22,43 @@ export function SettingsPage() {
   }, []);
 
   async function save() {
-    await api.put('/settings/suspension_rules', { value: { graceDays: Number(graceDays), notifyDaysBeforeDue: Number(notifyDays) } });
-    await api.put('/settings/optical_thresholds', { value: { rxWarnDbm: Number(rxWarn), rxCriticalDbm: Number(rxCritical) } });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await api.put('/settings/suspension_rules', { value: { graceDays: Number(graceDays), notifyDaysBeforeDue: Number(notifyDays) } });
+      await api.put('/settings/optical_thresholds', { value: { rxWarnDbm: Number(rxWarn), rxCriticalDbm: Number(rxCritical) } });
+      toast.success('Configuración guardada.');
+    } catch {
+      toast.error('No se pudo guardar la configuración.');
+    }
   }
 
   return (
-    <div className="p-8 max-w-lg">
-      <h1 className="text-2xl font-display font-bold mb-1">Configuración</h1>
-      <p className="text-muted text-sm mb-6">Reglas de negocio del sistema. El branding completo (logo, colores) se termina de exponer aquí en producción.</p>
+    <div className="p-8 max-w-lg space-y-5">
+      <div>
+        <h1 className="text-2xl font-display font-bold mb-1">Configuración</h1>
+        <p className="text-muted text-sm">Reglas de negocio y apariencia del sistema.</p>
+      </div>
+
+      <div className="status-panel status-panel--neutral space-y-3">
+        <p className="text-sm font-medium">Apariencia</p>
+        <p className="text-xs text-muted">Color principal de la interfaz — se aplica al instante para todos tus usuarios en este navegador.</p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {ACCENT_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setAccent(opt.key)}
+              className={`flex items-center gap-2 border rounded-md px-3 py-1.5 text-xs transition-colors ${
+                accent === opt.key ? 'border-signal text-ink bg-surface-raised' : 'border-border text-muted hover:text-ink'
+              }`}
+            >
+              <span
+                className="h-3 w-3 rounded-full shrink-0"
+                style={{ background: opt.key === 'teal' ? '#1FB6A6' : opt.key === 'indigo' ? '#6366F1' : opt.key === 'amber' ? '#E8A23D' : '#E1554F' }}
+              />
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="status-panel status-panel--neutral space-y-4">
         <p className="text-sm font-medium">Motor de suspensión</p>
@@ -43,7 +74,7 @@ export function SettingsPage() {
         </div>
 
         <button onClick={save} className="bg-signal text-base text-sm font-medium rounded-md px-4 py-2">
-          {saved ? 'Guardado ✓' : 'Guardar cambios'}
+          Guardar cambios
         </button>
       </div>
     </div>

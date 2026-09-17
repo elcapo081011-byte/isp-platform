@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useEffect, useState } from 'react';
 import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity } from 'lucide-react';
 import { api } from '../lib/api';
+import { useToast } from '../components/Toast';
 const EMPTY_FORM = {
     name: '',
     host: '',
@@ -29,6 +30,7 @@ export function MikrotikPage() {
     const [sessions, setSessions] = useState(null);
     const [systemInfo, setSystemInfo] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const toast = useToast();
     async function load() {
         setLoading(true);
         try {
@@ -72,6 +74,7 @@ export function MikrotikPage() {
                 location: form.location || undefined,
             });
             setModalOpen(false);
+            toast.success('Router agregado. Verificando conexión…');
             await load();
         }
         catch (err) {

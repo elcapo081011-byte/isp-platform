@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, Gauge, Network, Layers, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { Plan } from '../lib/types';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 
 const TECHNOLOGIES = [
   { value: 'FTTH', label: 'Fibra (FTTH)' },
@@ -43,6 +45,8 @@ export function PlansPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function load() {
     setLoading(true);
@@ -113,6 +117,7 @@ export function PlansPage() {
         await api.post('/plans', payload);
       }
       setModalOpen(false);
+      toast.success(editingId ? 'Plan actualizado.' : 'Plan creado.');
       await load();
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'No se pudo guardar el plan.');
@@ -122,8 +127,15 @@ export function PlansPage() {
   }
 
   async function handleDelete(p: Plan) {
-    if (!confirm(`¿Eliminar el plan "${p.name}"? Si tiene clientes activos, se marcará como inactivo en vez de borrarse.`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar el plan "${p.name}"?`,
+      description: 'Si tiene clientes activos, se marcará como inactivo en vez de borrarse.',
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
     await api.delete(`/plans/${p.id}`);
+    toast.success('Plan eliminado.');
     await load();
   }
 

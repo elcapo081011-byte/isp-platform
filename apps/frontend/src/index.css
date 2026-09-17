@@ -22,3 +22,16 @@
   .status-panel--critical { @apply border-l-critical; }
   .status-panel--neutral { @apply border-l-border; }
 }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #232B35 transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #232B35; border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
