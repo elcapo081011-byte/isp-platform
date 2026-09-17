@@ -1,0 +1,9 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import { StatusBadge } from '../components/StatusBadge';
+export function InventoryPage() {
+    const [items, setItems] = useState([]);
+    useEffect(() => { api.get('/inventory').then((res) => setItems(res.data)); }, []);
+    return (_jsxs("div", { className: "p-8 max-w-5xl", children: [_jsx("h1", { className: "text-2xl font-display font-bold mb-1", children: "Inventario" }), _jsx("p", { className: "text-muted text-sm mb-6", children: "ONU, routers, OLT, SFP, fibra, splitters, NAP y m\u00E1s \u2014 con movimientos auditados." }), _jsx("div", { className: "border border-border rounded-md overflow-hidden", children: _jsxs("table", { className: "w-full text-sm", children: [_jsx("thead", { className: "bg-surface text-muted text-xs", children: _jsxs("tr", { children: [_jsx("th", { className: "text-left px-4 py-3", children: "Item" }), _jsx("th", { className: "text-left px-4 py-3", children: "Categor\u00EDa" }), _jsx("th", { className: "text-left px-4 py-3", children: "Serial" }), _jsx("th", { className: "text-left px-4 py-3", children: "Estado" })] }) }), _jsxs("tbody", { children: [items.map((i) => (_jsxs("tr", { className: "border-t border-border", children: [_jsx("td", { className: "px-4 py-3", children: i.name }), _jsx("td", { className: "px-4 py-3 text-muted", children: i.category }), _jsx("td", { className: "px-4 py-3 text-muted", children: i.serial ?? '—' }), _jsx("td", { className: "px-4 py-3", children: _jsx(StatusBadge, { status: i.status }) })] }, i.id))), items.length === 0 && (_jsx("tr", { children: _jsx("td", { colSpan: 4, className: "px-4 py-6 text-center text-muted", children: "Sin art\u00EDculos registrados." }) }))] })] }) })] }));
+}

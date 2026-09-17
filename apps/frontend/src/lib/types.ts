@@ -6,8 +6,54 @@ export interface Plan {
   price: string;
   currency: string;
   technology: string;
+  mikrotikProfile: string | null;
+  burstLimit: string | null;
+  priority: number;
+  vlan: number | null;
+  description: string | null;
   status: 'ACTIVE' | 'INACTIVE';
   isDemo: boolean;
+}
+
+export interface Router {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  location: string | null;
+  status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  isDemo: boolean;
+}
+
+export interface Olt {
+  id: string;
+  name: string;
+  vendor: 'HUAWEI' | 'ZTE' | 'FIBERHOME' | 'GENERIC_SNMP' | 'MOCK';
+  model: string | null;
+  host: string;
+  location: string | null;
+  status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
+  lastCheckedAt: string | null;
+  isDemo: boolean;
+}
+
+export interface Onu {
+  id: string;
+  oltId: string;
+  ponPort: string;
+  serial: string;
+  mac: string | null;
+  model: string | null;
+  status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
+}
+
+export interface PonPort {
+  ponId: string;
+  status: 'ONLINE' | 'OFFLINE';
+  onuCount: number;
+  onlineOnuCount: number;
 }
 
 export interface Service {
