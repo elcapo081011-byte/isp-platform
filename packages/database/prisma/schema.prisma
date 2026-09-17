@@ -1,0 +1,611 @@
+// ==========================================================================
+// ISP MANAGEMENT PLATFORM — Prisma Schema
+// Este archivo crece por fases. Fase 1 incluye: Auth, RBAC, Auditoría.
+// Las entidades de fases posteriores (Customer, Plan, Invoice, Router, OLT,
+// ONU, etc.) están declaradas como esqueleto comentado al final para que
+// veas el modelo completo planeado, y se activarán en su fase correspondiente.
+// ==========================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --------------------------------------------------------------------------
+// MULTI-TENANCY — cada ISP que se registra en la plataforma es su propia
+// Organización, con sus clientes, planes, routers, OLT, facturas, etc.
+// completamente aislados de los demás. Un ISP jamás ve datos de otro.
+// --------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // subdominio/identificador público, ej. "fibraveloz"
+  isActive  Boolean  @default(true)
+  plan      String   @default("TRIAL") // TRIAL, BASIC, PRO — para el propio SaaS
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  customers      Customer[]
+  plans          Plan[]
+  routers        Router[]
+  olts           Olt[]
+  naps           Nap[]
+  tickets        Ticket[]
+  inventoryItems InventoryItem[]
+  apiKeys        ApiKey[]
+  invoices       Invoice[]
+  alerts         Alert[]
+  networkEvents  NetworkEvent[]
+  notifications  Notification[]
+  settings       Setting[]
+  auditLogs      AuditLog[]
+}
+
+// --------------------------------------------------------------------------
+// AUTH / RBAC (Fase 1)
+// --------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email         String    @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  isActive      Boolean   @default(true)
+  isDemo        Boolean   @default(false)
+  // true solo para el equipo dueño de la plataforma (tú) — permite soporte
+  // multi-tenant sin pertenecer a los datos de ningún ISP cliente.
+  isPlatformAdmin Boolean @default(false)
+  lastLoginAt   DateTime?
+  refreshTokenHash String?
+  roles         UserRole[]
+  auditLogs     AuditLog[]
+  assignedCustomers Customer[]
+  payments      Payment[]
+  assignedTickets Ticket[]
+  ticketComments TicketComment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique // SUPER_ADMIN, ADMIN, SOPORTE, TECNICO, FACTURACION, MONITORING
+  description String?
+  isSystem    Boolean          @default(false)
+  users       UserRole[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique // ej. clients.view, billing.create, olt.manage
+  description String?
+  module      String           // ej. "clients", "billing", "olt"
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// --------------------------------------------------------------------------
+// AUDITORÍA (Fase 1 — se registra desde el primer módulo)
+// --------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  organizationId String?
+  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // ej. "customer.suspend", "auth.login"
+  entityType String   // ej. "Customer"
+  entityId   String?
+  ipAddress  String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Setting {
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@id([organizationId, key])
+}
+
+// --------------------------------------------------------------------------
+// PLANES DE INTERNET (Fase 2)
+// --------------------------------------------------------------------------
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Plan {
+  id                String     @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  downloadMbps      Int
+  uploadMbps        Int
+  price             Decimal    @db.Decimal(10, 2)
+  currency          String     @default("USD")
+  technology        String     // ej. "FTTH", "WIRELESS", "CABLE"
+  mikrotikProfile   String?    // nombre del perfil PPPoE/simple-queue en MikroTik (se aplica en Fase 4)
+  burstLimit        String?
+  priority          Int        @default(8)
+  vlan              Int?
+  description       String?
+  status            PlanStatus @default(ACTIVE)
+  isDemo            Boolean    @default(false)
+  services          Service[]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([organizationId, status])
+}
+
+// --------------------------------------------------------------------------
+// CLIENTES Y SERVICIOS (Fase 2)
+// --------------------------------------------------------------------------
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+  DISCONNECTED
+  PENDING_INSTALLATION
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  OTHER
+}
+
+model Customer {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  documentId      String?
+  phone           String?
+  whatsapp        String?
+  email           String?
+  address         String?
+  latitude         Float?
+  longitude        Float?
+  reference       String?
+  status          CustomerStatus @default(PENDING_INSTALLATION)
+  technicianId    String?
+  technician      User?          @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  paymentMethod   PaymentMethod  @default(CASH)
+  billingDay      Int            @default(1) // día de corte, 1-28
+  notes           String?
+  isDemo          Boolean        @default(false)
+  services        Service[]
+  invoices        Invoice[]
+  tickets         Ticket[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([organizationId, documentId])
+  @@index([organizationId, status])
+  @@index([lastName, firstName])
+}
+
+enum ServiceStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model Service {
+  id              String        @id @default(uuid())
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            Plan          @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status          ServiceStatus @default(ACTIVE)
+  pppoeUsername   String?       @unique
+  // La contraseña PPPoE se almacena encriptada (no en texto plano, punto 28);
+  // el cifrado/descifrado se implementa en el módulo pppoe de la Fase 4.
+  pppoeEncryptedPassword String?
+  ipAddress       String?
+  macAddress      String?
+  vlan            Int?
+  installedAt     DateTime?
+  // Referencias a infraestructura óptica: se conectan de verdad en Fase 5/6.
+  oltId           String?
+  ponPort         String?
+  onuSerial       String?
+  napId           String?
+  observations    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  invoices        Invoice[]
+  routerId        String?
+  router          Router?       @relation(fields: [routerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([planId])
+}
+
+// ==========================================================================
+// ESQUELETO PLANEADO — se activa por fase (documentado aquí para que el
+// modelo relacional completo sea visible desde el inicio, según punto 32).
+// No se generan tablas para estos modelos hasta que se descomenten en su fase.
+// ==========================================================================
+
+// FASE 3 — Facturación y pagos
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  PARTIAL
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number      String
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  amount      Decimal       @db.Decimal(10, 2)
+  discount    Decimal       @default(0) @db.Decimal(10, 2)
+  surcharge   Decimal       @default(0) @db.Decimal(10, 2)
+  currency    String        @default("USD")
+  status      InvoiceStatus @default(PENDING)
+  issuedAt    DateTime      @default(now())
+  dueDate     DateTime
+  paidAt      DateTime?
+  notes       String?
+  isDemo      Boolean       @default(false)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([organizationId, number])
+  @@index([customerId])
+  @@index([organizationId, status])
+  @@index([dueDate])
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod @default(CASH)
+  reference      String?
+  registeredById String?
+  registeredBy   User?         @relation(fields: [registeredById], references: [id], onDelete: SetNull)
+  paidAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  @@index([invoiceId])
+}
+
+// FASE 4 — model Router { ... }, model PppoeAccount { ... }
+// FASE 4 (activado) — MikroTik
+enum RouterStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+  UNKNOWN
+}
+
+model Router {
+  id                String       @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  host              String
+  port              Int          @default(8728)
+  username          String
+  encryptedPassword String
+  useTls            Boolean      @default(false)
+  location          String?
+  status            RouterStatus @default(UNKNOWN)
+  lastCheckedAt     DateTime?
+  lastError         String?
+  isDemo            Boolean      @default(false)
+  services          Service[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+// FASE 5 — model Olt { ... }, model PonPort { ... }, model Onu { ... }
+// FASE 5 (activado) — OLT / PON / ONU
+enum OltVendor {
+  HUAWEI
+  ZTE
+  FIBERHOME
+  GENERIC_SNMP
+  MOCK
+}
+
+model Olt {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  vendor         OltVendor @default(MOCK)
+  model          String?
+  host           String
+  snmpCommunity  String?  // se guarda encriptado si contiene datos sensibles reales
+  sshPort        Int?
+  apiPort        Int?
+  username       String?
+  encryptedPassword String?
+  // OIDs específicos del fabricante/modelo, provistos por el administrador desde
+  // la documentación oficial — nunca inventados por el sistema (punto 31).
+  vendorOidMap   Json?
+  latitude       Float?
+  longitude      Float?
+  location       String?
+  status         RouterStatus @default(UNKNOWN)
+  lastCheckedAt  DateTime?
+  isDemo         Boolean  @default(false)
+  onus           Onu[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model Onu {
+  id            String   @id @default(uuid())
+  oltId         String
+  olt           Olt      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  ponPort       String
+  serial        String
+  mac           String?
+  model         String?
+  status        RouterStatus @default(UNKNOWN)
+  rxPowerDbm    Float?
+  txPowerDbm    Float?
+  temperatureCelsius Float?
+  distanceMeters Float?
+  serviceProfile String?
+  lineProfile    String?
+  vlan           Int?
+  serviceId      String?  @unique
+  lastSeenAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([oltId, serial])
+  @@index([ponPort])
+}
+
+// FASE 6 (activado) — NAP / Fibra
+model Nap {
+  id          String   @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name        String
+  latitude    Float
+  longitude   Float
+  splitterRatio String? // ej. "1:8", "1:16"
+  totalPorts  Int      @default(8)
+  oltId       String?
+  ponPort     String?
+  status      String   @default("ACTIVE")
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// FASE 7 (activado) — Monitoreo / Alertas
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Alert {
+  id          String        @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source      String        // ej. "ROUTER", "OLT", "ONU"
+  sourceId    String?
+  severity    AlertSeverity
+  status      AlertStatus   @default(OPEN)
+  title       String
+  description String?
+  createdAt   DateTime      @default(now())
+  resolvedAt  DateTime?
+
+  @@index([organizationId, status])
+  @@index([source, sourceId])
+}
+
+model NetworkEvent {
+  id        String   @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source    String
+  sourceId  String?
+  eventType String   // ej. "STATUS_CHANGE"
+  fromState String?
+  toState   String?
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([source, sourceId])
+  @@index([createdAt])
+}
+
+// FASE 8 (activado) — Tickets / Inventario
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model Ticket {
+  id           String         @id @default(uuid())
+  organizationId String
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subject      String
+  category     String         // ej. "SIN_INTERNET", "LENTITUD", "WIFI", "ONU_OFFLINE", "SEÑAL", "PAGO", "OTRO"
+  priority     TicketPriority @default(MEDIUM)
+  status       TicketStatus   @default(OPEN)
+  assignedToId String?
+  assignedTo   User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  comments     TicketComment[]
+  isDemo       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([organizationId, status])
+  @@index([customerId])
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  INSTALLED
+  DAMAGED
+  IN_REPAIR
+  LOST
+}
+
+model InventoryItem {
+  id          String          @id @default(uuid())
+  organizationId String
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category    String          // ONU, ROUTER, OLT, SFP, FIBER, SPLITTER, NAP, CABLE, POWER_SUPPLY, OTHER
+  name        String
+  serial      String?
+  status      InventoryStatus @default(IN_STOCK)
+  assignedToCustomerId String?
+  notes       String?
+  isDemo      Boolean         @default(false)
+  movements   InventoryMovement[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([organizationId, serial])
+  @@index([organizationId])
+}
+
+model InventoryMovement {
+  id          String        @id @default(uuid())
+  itemId      String
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fromStatus  InventoryStatus?
+  toStatus    InventoryStatus
+  note        String?
+  userId      String?
+  createdAt   DateTime      @default(now())
+}
+// FASE 9 (activado) — Notificaciones
+enum NotificationStatus {
+  SENT
+  FAILED
+  PENDING
+}
+
+model Notification {
+  id             String             @id @default(uuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event          String
+  channel        String             // INTERNAL | EMAIL | WHATSAPP | SMS
+  recipientEmail String?
+  recipientPhone String?
+  message        String
+  status         NotificationStatus @default(PENDING)
+  createdAt      DateTime           @default(now())
+
+  @@index([organizationId, event])
+  @@index([createdAt])
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String    // primeros caracteres visibles, para identificar la key en la UI
+  scopes      String[]  // ej. ["clients.view", "billing.view"]
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([organizationId])
+}
