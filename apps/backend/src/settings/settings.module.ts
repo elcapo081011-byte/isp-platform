@@ -1,6 +1,7 @@
 import { Module, Injectable, Controller, Get, Put, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsObject } from 'class-validator';
+import { Prisma } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../rbac/permissions.guard';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -39,10 +40,13 @@ export class SettingsService {
   }
 
   async set(organizationId: string, key: string, value: Record<string, unknown>) {
+    // Prisma exige que un campo Json reciba su tipo InputJsonValue, no un
+    // Record<string, unknown> genérico — se castea explícitamente aquí.
+    const jsonValue = value as Prisma.InputJsonValue;
     return this.prisma.setting.upsert({
       where: { organizationId_key: { organizationId, key } },
-      update: { value },
-      create: { organizationId, key, value },
+      update: { value: jsonValue },
+      create: { organizationId, key, value: jsonValue },
     });
   }
 }
