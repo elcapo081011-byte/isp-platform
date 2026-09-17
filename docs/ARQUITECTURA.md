@@ -61,8 +61,8 @@ ellos — es un signup público, igual que WispHub). A partir de ahí:
 
 Dos interfaces desacoplan la lógica de negocio del hardware:
 
-- `RouterProvider` (`packages/network-drivers/src/router-provider.interface.ts`)
-- `OltProvider` (`packages/network-drivers/src/olt-provider.interface.ts`)
+- `RouterProvider` (`apps/backend/src/network-drivers/src/router-provider.interface.ts`)
+- `OltProvider` (`apps/backend/src/network-drivers/src/olt-provider.interface.ts`)
 
 Cada una tiene:
 1. Un **Mock** funcional (desarrollo/demo, sin hardware real)
