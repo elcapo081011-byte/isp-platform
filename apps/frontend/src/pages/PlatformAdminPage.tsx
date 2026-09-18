@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export function PlatformAdminPage() {
@@ -23,7 +24,10 @@ export function PlatformAdminPage() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <h1 className="text-2xl font-display font-bold mb-1">Plataforma — todas las cuentas</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-display font-bold">Plataforma — todas las cuentas</h1>
+        <Link to="/platform/facturacion" className="text-sm text-signal hover:underline">Ver cobros de la plataforma →</Link>
+      </div>
       <p className="text-muted text-sm mb-6">
         Solo tú ves esta página. Cada fila es un ISP con su propia cuenta aislada.
       </p>

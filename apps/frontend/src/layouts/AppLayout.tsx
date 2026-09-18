@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserPlus, Wifi, FileText, Router, Radio, Boxes,
+  LayoutDashboard, Users, Wifi, FileText, Router, Radio, Boxes,
   Map as MapIcon, Activity, Ticket, Archive, BarChart3, Settings, LogOut,
-  ChevronLeft, ChevronRight, Search, Bell, Building2, X, Menu,
+  ChevronLeft, ChevronRight, Search, Bell, Building2, X, Menu, CreditCard,
 } from 'lucide-react';
 import { Logomark } from '../components/Logomark';
 import { useAuthStore } from '../store/auth.store';
@@ -32,7 +32,6 @@ const NAV: NavGroup[] = [
       { to: '/clientes', label: 'Todos', icon: Users, live: true },
       { to: '/clientes?status=ACTIVE', label: 'Activos', icon: Users, live: true },
       { to: '/clientes?status=SUSPENDED', label: 'Suspendidos', icon: Users, live: true },
-      { to: '/clientes/nuevo', label: 'Nuevo cliente', icon: UserPlus, live: true },
     ],
   },
   {
@@ -73,7 +72,10 @@ const NAV: NavGroup[] = [
   },
   {
     label: '',
-    items: [{ to: '/settings', label: 'Configuración', icon: Settings, live: true }],
+    items: [
+      { to: '/suscripcion', label: 'Mi suscripción', icon: CreditCard, live: true },
+      { to: '/settings', label: 'Configuración', icon: Settings, live: true },
+    ],
   },
 ];
 
@@ -139,7 +141,7 @@ export function AppLayout() {
           ))}
 
           {user?.isPlatformAdmin && (
-            <div className="border-t border-border pt-3">
+            <div className="border-t border-border pt-3 space-y-0.5">
               <NavLink
                 to="/platform"
                 onClick={() => setMobileOpen(false)}
@@ -152,6 +154,19 @@ export function AppLayout() {
               >
                 <Building2 size={16} strokeWidth={2} className="shrink-0" />
                 <span className={collapsed ? 'md:hidden' : ''}>Plataforma (todas las cuentas)</span>
+              </NavLink>
+              <NavLink
+                to="/platform/facturacion"
+                onClick={() => setMobileOpen(false)}
+                title={collapsed ? 'Cobros de la plataforma' : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                    isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
+                  } ${collapsed ? 'md:justify-center' : ''}`
+                }
+              >
+                <FileText size={16} strokeWidth={2} className="shrink-0" />
+                <span className={collapsed ? 'md:hidden' : ''}>Cobros de la plataforma</span>
               </NavLink>
             </div>
           )}

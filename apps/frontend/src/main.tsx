@@ -26,6 +26,8 @@ const MonitoringPage = lazy(() => import('./pages/MonitoringPage').then((m) => (
 const NapMapPage = lazy(() => import('./pages/NapMapPage').then((m) => ({ default: m.NapMapPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const PlatformAdminPage = lazy(() => import('./pages/PlatformAdminPage').then((m) => ({ default: m.PlatformAdminPage })));
+const PlatformBillingPage = lazy(() => import('./pages/PlatformBillingPage').then((m) => ({ default: m.PlatformBillingPage })));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 
 function RouteLoader() {
   return (
@@ -68,7 +70,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="monitoreo" element={<MonitoringPage />} />
                 <Route path="mapa" element={<NapMapPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="suscripcion" element={<SubscriptionPage />} />
                 <Route path="platform" element={<PlatformAdminPage />} />
+                <Route path="platform/facturacion" element={<PlatformBillingPage />} />
               </Route>
             </Routes>
           </Suspense>
