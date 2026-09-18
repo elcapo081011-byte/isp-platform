@@ -5,16 +5,45 @@ import { AuditService } from '../common/audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 /**
+ * Escalones de la plataforma — calcados de los planes reales de WispHub
+ * (wisphub.net/precios), con el escalón gratis bajado a 15 clientes en vez
+ * de sus 30. No se cobra por cliente extra: al superar el tope de un
+ * escalón se factura el precio fijo mensual del siguiente escalón completo.
+ */
+export interface PlatformTier {
+  name: string;
+  maxClients: number; // Infinity para el escalón más alto
+  monthlyPrice: number;
+}
+
+export const PLATFORM_TIERS: PlatformTier[] = [
+  { name: 'FREE', maxClients: 15, monthlyPrice: 0 },
+  { name: 'BASIC', maxClients: 200, monthlyPrice: 20 },
+  { name: 'PRO', maxClients: 800, monthlyPrice: 50 },
+  { name: 'ENTERPRISE', maxClients: Infinity, monthlyPrice: 80 },
+];
+
+export function tierForClientCount(clientCount: number): PlatformTier {
+  return PLATFORM_TIERS.find((t) => clientCount <= t.maxClients) ?? PLATFORM_TIERS[PLATFORM_TIERS.length - 1];
+}
+
+function nextTier(tier: PlatformTier): PlatformTier | null {
+  const idx = PLATFORM_TIERS.findIndex((t) => t.name === tier.name);
+  return idx >= 0 && idx < PLATFORM_TIERS.length - 1 ? PLATFORM_TIERS[idx + 1] : null;
+}
+
+/**
  * Fase 13 — Facturación SaaS de la PLATAFORMA (lo que tú le cobras a cada
  * ISP que usa el sistema, no lo que cada ISP le cobra a sus propios
  * clientes — eso ya existe en `billing/`).
  *
- * Modelo replicado de WispHub: cada organización tiene un número de
- * clientes gratis (`freeClientLimit`, 30 por defecto). Si un mes cierra
- * con más clientes que ese límite, se genera una PlatformInvoice cobrando
- * solo por los clientes que exceden el límite. Si no se paga dentro del
- * período de gracia, la organización se suspende automáticamente (igual
- * que ya se suspende a un cliente moroso dentro de cada ISP).
+ * Modelo de escalones tipo WispHub: cada organización cae en un escalón
+ * (`PLATFORM_TIERS`) según su cantidad de clientes activos. Si un mes cierra
+ * fuera del escalón gratis (15 clientes), se genera una PlatformInvoice por
+ * el precio fijo mensual de ese escalón — nunca por cliente individual. Si
+ * no se paga dentro del período de gracia, la organización se suspende
+ * automáticamente (igual que ya se suspende a un cliente moroso dentro de
+ * cada ISP).
  *
  * Honestidad ante todo (mismo criterio que los drivers OLT): hoy NO hay
  * ninguna pasarela de pago conectada (Stripe/MercadoPago/etc. no están
@@ -41,8 +70,8 @@ export class PlatformBillingService {
     if (!org) throw new NotFoundException('Organización no encontrada');
 
     const clientCount = await this.prisma.customer.count({ where: { organizationId, isDemo: false } });
-    const billableClients = Math.max(0, clientCount - org.freeClientLimit);
-    const estimatedAmount = Number(org.pricePerExtraClient) * billableClients;
+    const tier = tierForClientCount(clientCount);
+    const upgrade = nextTier(tier);
     const isTrial = org.plan === 'TRIAL' && !!org.trialEndsAt && org.trialEndsAt.getTime() > Date.now();
     const trialDaysLeft = org.trialEndsAt
       ? Math.max(0, Math.ceil((org.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -52,11 +81,11 @@ export class PlatformBillingService {
       plan: org.plan,
       isActive: org.isActive,
       clientCount,
-      freeClientLimit: org.freeClientLimit,
-      billableClients,
-      pricePerExtraClient: Number(org.pricePerExtraClient),
+      tier: tier.name,
+      tierMaxClients: Number.isFinite(tier.maxClients) ? tier.maxClients : null,
+      monthlyPrice: tier.monthlyPrice,
       currency: org.platformCurrency,
-      estimatedAmount,
+      nextTier: upgrade ? { name: upgrade.name, maxClients: Number.isFinite(upgrade.maxClients) ? upgrade.maxClients : null, monthlyPrice: upgrade.monthlyPrice } : null,
       isTrial,
       trialEndsAt: org.trialEndsAt,
       trialDaysLeft,
@@ -126,7 +155,7 @@ export class PlatformBillingService {
   // -- Ciclo automático (igual patrón que SuspensionEngineService) --------
 
   // El día 1 de cada mes se factura el uso del mes anterior.
-  @Cron('0 7 1 * *')
+  @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_7AM)
   async generateMonthlyInvoices() {
     const organizations = await this.prisma.organization.findMany();
     const period = this.previousPeriod();
@@ -134,21 +163,20 @@ export class PlatformBillingService {
     for (const org of organizations) {
       try {
         const clientCount = await this.prisma.customer.count({ where: { organizationId: org.id, isDemo: false } });
-        const billableClients = Math.max(0, clientCount - org.freeClientLimit);
-        if (billableClients <= 0) continue; // dentro del límite gratis, no se cobra — igual que WispHub
+        const tier = tierForClientCount(clientCount);
+        if (tier.monthlyPrice <= 0) continue; // escalón gratis, no se cobra — igual que WispHub
 
-        const amount = Number(org.pricePerExtraClient) * billableClients;
+        const amount = tier.monthlyPrice;
         const issuedAt = new Date();
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 7);
 
-        const invoice = await this.prisma.platformInvoice.create({
+        await this.prisma.platformInvoice.create({
           data: {
             organizationId: org.id,
             period,
             clientCount,
-            freeLimit: org.freeClientLimit,
-            billableClients,
+            tier: tier.name,
             amount,
             currency: org.platformCurrency,
             issuedAt,
@@ -157,10 +185,10 @@ export class PlatformBillingService {
         });
 
         await this.notifyOwner(org.id, 'platform_invoice.issued', {
-          message: `Tienes ${clientCount} clientes (${org.freeClientLimit} gratis). Se generó una factura de ${org.platformCurrency} ${amount.toFixed(2)} por ${billableClients} cliente(s) adicional(es), vence el ${dueDate.toLocaleDateString('es')}.`,
+          message: `Tienes ${clientCount} clientes, lo que te ubica en el plan ${tier.name}. Se generó una factura de ${org.platformCurrency} ${amount.toFixed(2)}, vence el ${dueDate.toLocaleDateString('es')}.`,
         });
 
-        this.logger.log(`Factura de plataforma generada: org ${org.name}, período ${period}, ${org.platformCurrency} ${amount}.`);
+        this.logger.log(`Factura de plataforma generada: org ${org.name}, período ${period}, plan ${tier.name}, ${org.platformCurrency} ${amount}.`);
       } catch (err: any) {
         // Ya existe una factura para ese período (constraint única) u otro error puntual;
         // no debe frenar el ciclo del resto de las organizaciones.
