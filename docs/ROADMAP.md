@@ -21,6 +21,14 @@ maqueta visual.
 - [x] **Fase 12** — Documentación completa (`docs/ARQUITECTURA.md`, `docs/PRODUCCION.md`,
       `docs/SEGURIDAD.md`), diseño del portal del cliente (`docs/PORTAL_CLIENTE.md` — no
       implementado, tal como el brief original lo pidió como paso posterior).
+- [x] **Fase 13** — Facturación SaaS de la plataforma (lo que el dueño de la plataforma le
+      cobra a cada ISP, no lo que cada ISP le cobra a sus clientes): límite de clientes
+      gratis por organización, facturación mensual automática por cliente excedente,
+      vencimiento y suspensión automática de la cuenta por falta de pago (mismo motor de
+      cron que la Fase 3), y reactivación al pagar. El único método de pago real hoy es
+      manual (el dueño de la plataforma marca la factura como pagada); conectar un gateway
+      automático (Stripe/MercadoPago/etc.) queda pendiente de definir país y proveedor —
+      declarado explícitamente, no simulado.
 
 ## Lo que queda fuera de este ciclo, honestamente
 
@@ -28,3 +36,6 @@ maqueta visual.
 - Portal del cliente (diseñado, no construido — ver `docs/PORTAL_CLIENTE.md`).
 - Canales WhatsApp/SMS (interfaz lista, falta un proveedor con documentación oficial).
 - Subida de backups a almacenamiento externo (hoy quedan en el volumen local).
+- Pasarela de pago automática para cobrar la suscripción SaaS (Fase 13 deja el motor de
+  facturación/suspensión listo; falta conectar Stripe/MercadoPago/dLocal u otro proveedor
+  una vez definido país y moneda).
