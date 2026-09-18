@@ -69,7 +69,7 @@ export function SubscriptionPage() {
     );
   }
 
-  const cap = usage.tierMaxClients ?? usage.clientCount || 1;
+  const cap = usage.tierMaxClients ?? (usage.clientCount || 1);
   const usagePct = Math.min(100, Math.round((usage.clientCount / cap) * 100));
   const hasOverdue = invoices.some((i) => i.status === 'OVERDUE');
 
