@@ -1,36 +1,51 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { PauseCircle, PlayCircle } from 'lucide-react';
+import { PauseCircle, PlayCircle, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
-const TABS = [
-  'Información', 'Servicio', 'Facturas', 'Pagos', 'Conexión',
-  'OLT/ONU', 'Tickets', 'Historial', 'Notas', 'Auditoría',
-] as const;
-
+const TABS = ['Resumen', 'Servicio', 'Facturación', 'Conexión', 'OLT / ONU', 'Tickets', 'Historial'] as const;
 type Tab = typeof TABS[number];
 
 export function CustomerProfilePage() {
   const { id } = useParams();
   const [profile, setProfile] = useState<any>(null);
-  const [tab, setTab] = useState<Tab>('Información');
+  const [tab, setTab] = useState<Tab>('Resumen');
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   async function load() {
     const { data } = await api.get(`/customers/${id}`);
     setProfile(data);
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+  }, [id]);
 
   async function toggleSuspension() {
+    const isSuspended = profile.information.status === 'SUSPENDED';
+    const ok = await confirm({
+      title: isSuspended ? '¿Reactivar este cliente?' : '¿Suspender este cliente?',
+      description: isSuspended
+        ? 'Se intentará restaurar su sesión en el router asignado.'
+        : 'Se intentará cortar su sesión en el router asignado de inmediato.',
+      confirmLabel: isSuspended ? 'Reactivar' : 'Suspender',
+      danger: !isSuspended,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
-      if (profile.information.status === 'SUSPENDED') {
-        await api.post(`/customers/${id}/reactivate`);
+      const { data } = isSuspended
+        ? await api.post(`/customers/${id}/reactivate`)
+        : await api.post(`/customers/${id}/suspend`, { reason: 'Suspensión manual desde el panel' });
+      if (data?.networkAction && data.networkAction.applied === false) {
+        toast.warning(`Estado actualizado, pero la acción de red no se aplicó: ${data.networkAction.reason ?? data.networkAction.error ?? 'sin detalle'}`);
       } else {
-        await api.post(`/customers/${id}/suspend`, { reason: 'Suspensión manual desde el panel' });
+        toast.success(isSuspended ? 'Cliente reactivado.' : 'Cliente suspendido.');
       }
       await load();
     } finally {
@@ -38,26 +53,33 @@ export function CustomerProfilePage() {
     }
   }
 
-  if (!profile) return <div className="p-8 text-muted text-sm">Cargando...</div>;
+  if (!profile) return <div className="p-8 text-muted text-sm">Cargando…</div>;
 
   const info = profile.information;
+  const service = profile.service?.[0];
   const isSuspended = info.status === 'SUSPENDED';
+  const openTicketsCount = profile.tickets.filter((t: any) => !['RESOLVED', 'CLOSED'].includes(t.status)).length;
+  const overdueCount = profile.invoices.filter((i: any) => i.status === 'OVERDUE').length;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-5xl page-enter">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-display font-bold mb-1">{info.firstName} {info.lastName}</h1>
-          <div className="flex items-center gap-2 text-sm text-muted">
+          <h1 className="text-2xl font-display font-bold mb-1">
+            {info.firstName} {info.lastName}
+          </h1>
+          <div className="flex items-center gap-3 text-sm text-muted flex-wrap">
             <StatusBadge status={info.status} />
             <span>{info.documentId ?? 'sin documento'}</span>
+            {service && <span>· {service.plan.name}</span>}
+            {service?.ipAddress && <span>· {service.ipAddress}</span>}
           </div>
         </div>
         <button
           onClick={toggleSuspension}
           disabled={busy}
           className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50 ${
-            isSuspended ? 'bg-ok text-base' : 'bg-critical text-base'
+            isSuspended ? 'bg-ok text-base' : 'bg-critical text-white'
           }`}
         >
           {isSuspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
@@ -70,17 +92,23 @@ export function CustomerProfilePage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm whitespace-nowrap border-b-2 transition-colors ${
+            className={`px-3 py-2 text-sm whitespace-nowrap border-b-2 transition-colors flex items-center gap-1.5 ${
               tab === t ? 'border-signal text-ink' : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             {t}
+            {t === 'Tickets' && openTicketsCount > 0 && (
+              <span className="text-[10px] bg-critical/15 text-critical rounded-full px-1.5">{openTicketsCount}</span>
+            )}
+            {t === 'Facturación' && overdueCount > 0 && (
+              <span className="text-[10px] bg-critical/15 text-critical rounded-full px-1.5">{overdueCount}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {tab === 'Información' && (
-        <div className="grid grid-cols-2 gap-4 text-sm">
+      {tab === 'Resumen' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <Field label="Teléfono" value={info.phone} />
           <Field label="WhatsApp" value={info.whatsapp} />
           <Field label="Email" value={info.email} />
@@ -89,6 +117,10 @@ export function CustomerProfilePage() {
           <Field label="Técnico asignado" value={info.technician ? `${info.technician.firstName} ${info.technician.lastName}` : null} />
           <Field label="Día de corte" value={info.billingDay} />
           <Field label="Método de pago" value={info.paymentMethod} />
+          <div className="col-span-2 pt-3 border-t border-border">
+            <p className="text-xs text-muted mb-0.5">Notas</p>
+            <p>{info.notes || 'Sin notas registradas.'}</p>
+          </div>
         </div>
       )}
 
@@ -96,53 +128,123 @@ export function CustomerProfilePage() {
         <div className="space-y-3">
           {profile.service.length === 0 ? (
             <p className="text-muted text-sm">Este cliente no tiene un servicio activo todavía.</p>
-          ) : profile.service.map((s: any) => (
-            <div key={s.id} className="status-panel status-panel--ok">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium">{s.plan.name}</p>
-                  <p className="text-xs text-muted">{s.plan.downloadMbps}/{s.plan.uploadMbps} Mbps · ${s.plan.price}/{s.plan.currency}</p>
+          ) : (
+            profile.service.map((s: any) => (
+              <div key={s.id} className="status-panel status-panel--ok">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="font-medium">{s.plan.name}</p>
+                    <p className="text-xs text-muted">
+                      {s.plan.downloadMbps}/{s.plan.uploadMbps} Mbps · ${s.plan.price} {s.plan.currency}/mes
+                    </p>
+                  </div>
+                  <StatusBadge status={s.status} />
                 </div>
-                <StatusBadge status={s.status} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-3 border-t border-border">
+                  <Field label="Usuario PPPoE" value={s.pppoeUsername} />
+                  <Field label="IP" value={s.ipAddress} />
+                  <Field label="VLAN" value={s.plan.vlan} />
+                  <Field label="Perfil MikroTik" value={s.plan.mikrotikProfile} />
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
-      {tab === 'Facturas' && <PendingPhase note="El módulo de facturación se activa en la Fase 3." />}
-      {tab === 'Pagos' && <PendingPhase note="El registro de pagos se activa en la Fase 3." />}
+      {tab === 'Facturación' && (
+        <div className="space-y-6">
+          <div>
+            <p className="text-xs font-medium text-muted mb-2 uppercase tracking-wide">Facturas</p>
+            {profile.invoices.length === 0 ? (
+              <p className="text-sm text-muted">Sin facturas todavía.</p>
+            ) : (
+              <div className="border border-border rounded-md divide-y divide-border">
+                {profile.invoices.map((inv: any) => (
+                  <div key={inv.id} className="px-3 py-2.5 flex items-center justify-between text-sm">
+                    <div>
+                      <p>{inv.number}</p>
+                      <p className="text-xs text-muted">Vence {new Date(inv.dueDate).toLocaleDateString('es-DO')}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span>${Number(inv.amount).toFixed(2)}</span>
+                      <StatusBadge status={inv.status} />
+                      <a
+                        href={`${api.defaults.baseURL}/billing/invoices/${inv.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted hover:text-ink"
+                      >
+                        <Download size={14} />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted mb-2 uppercase tracking-wide">Pagos</p>
+            {profile.payments.length === 0 ? (
+              <p className="text-sm text-muted">Sin pagos registrados.</p>
+            ) : (
+              <div className="border border-border rounded-md divide-y divide-border">
+                {profile.payments.map((p: any) => (
+                  <div key={p.id} className="px-3 py-2.5 flex items-center justify-between text-sm">
+                    <span>{new Date(p.paidAt ?? p.createdAt).toLocaleDateString('es-DO')}</span>
+                    <span>${Number(p.amount).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {tab === 'Conexión' && (
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <Field label="Usuario PPPoE" value={profile.connection.pppoeUsername} />
           <Field label="IP asignada" value={profile.connection.ipAddress} />
           <div className="col-span-2">
             <p className="text-xs text-muted mt-2">
-              La sesión en vivo (uptime, tráfico, router) se conecta a MikroTik real en la Fase 4.
+              La sesión en vivo por cliente (uptime, tráfico exacto) requiere cruzar el usuario PPPoE con las sesiones activas del
+              router — puedes verlo agregado en MikroTik → Ver detalle → Sesiones PPPoE.
             </p>
           </div>
         </div>
       )}
 
-      {tab === 'OLT/ONU' && (
-        <div className="grid grid-cols-2 gap-4 text-sm">
+      {tab === 'OLT / ONU' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <Field label="OLT" value={profile.oltOnu.oltId} />
           <Field label="Serial ONU" value={profile.oltOnu.onuSerial} />
           <div className="col-span-2">
-            <p className="text-xs text-muted mt-2">Señal óptica en vivo disponible en la Fase 5.</p>
+            <p className="text-xs text-muted mt-2">
+              RX/TX y temperatura en vivo dependen del driver del fabricante de la ONU — visítalo en OLT → selecciona la OLT.
+            </p>
           </div>
         </div>
       )}
 
-      {tab === 'Tickets' && <PendingPhase note="El módulo de tickets se activa en la Fase 8." />}
+      {tab === 'Tickets' && (
+        <div className="space-y-2">
+          {profile.tickets.length === 0 ? (
+            <p className="text-sm text-muted">Sin tickets para este cliente.</p>
+          ) : (
+            profile.tickets.map((t: any) => (
+              <div key={t.id} className="status-panel status-panel--neutral flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{t.subject}</p>
+                  <p className="text-xs text-muted">{new Date(t.createdAt).toLocaleDateString('es-DO')}</p>
+                </div>
+                <StatusBadge status={t.status} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {tab === 'Historial' && <AuditList items={profile.history} />}
-      {tab === 'Auditoría' && <AuditList items={profile.audit} />}
-
-      {tab === 'Notas' && (
-        <p className="text-sm text-muted">{info.notes || 'Sin notas registradas.'}</p>
-      )}
     </div>
   );
 }
@@ -154,10 +256,6 @@ function Field({ label, value }: { label: string; value: any }) {
       <p>{value ?? '—'}</p>
     </div>
   );
-}
-
-function PendingPhase({ note }: { note: string }) {
-  return <div className="status-panel status-panel--neutral text-sm text-muted">{note}</div>;
 }
 
 function AuditList({ items }: { items: any[] }) {

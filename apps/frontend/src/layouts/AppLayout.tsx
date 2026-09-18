@@ -3,8 +3,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserPlus, Wifi, FileText, Router, Radio, Boxes,
   Map as MapIcon, Activity, Ticket, Archive, BarChart3, Settings, LogOut,
-  ChevronLeft, ChevronRight, Search, Bell, Building2, X,
+  ChevronLeft, ChevronRight, Search, Bell, Building2, X, Menu,
 } from 'lucide-react';
+import { Logomark } from '../components/Logomark';
 import { useAuthStore } from '../store/auth.store';
 import { useUIStore } from '../store/ui.store';
 import { api } from '../lib/api';
@@ -43,7 +44,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/mikrotik', label: 'MikroTik', icon: Router, live: true },
       { to: '/olt', label: 'OLT', icon: Radio, live: true },
-      { to: '/onu', label: 'ONU / ONT', icon: Boxes, live: false },
+      { to: '/onu', label: 'ONU / ONT', icon: Boxes, live: true },
       { to: '/mapa', label: 'NAP / Mapa', icon: MapIcon, live: true },
     ],
   },
@@ -88,6 +89,7 @@ export function AppLayout() {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   useEffect(() => {
@@ -103,25 +105,34 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen flex">
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
       <aside
-        className={`shrink-0 bg-surface border-r border-border flex flex-col transition-[width] duration-150 ${
-          collapsed ? 'w-16' : 'w-64'
-        }`}
+        className={`shrink-0 bg-surface border-r border-border flex flex-col transition-[width,transform] duration-150 fixed inset-y-0 left-0 z-40 md:static md:translate-x-0 ${
+          collapsed ? 'md:w-16' : 'md:w-64'
+        } w-64 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className={`h-16 flex items-center gap-2 border-b border-border ${collapsed ? 'justify-center px-0' : 'px-5'}`}>
-          <Radio className="text-signal shrink-0" size={22} strokeWidth={2.5} />
-          {!collapsed && <span className="font-display font-extrabold tracking-tight truncate">ISP Control</span>}
+        <div className={`h-16 flex items-center gap-2 border-b border-border shrink-0 ${collapsed ? 'md:justify-center md:px-0' : ''} px-5`}>
+          <Logomark size={22} />
+          <span className={`font-display font-extrabold tracking-tight truncate ${collapsed ? 'md:hidden' : ''}`}>ISP Control</span>
+          <button onClick={() => setMobileOpen(false)} className="ml-auto text-muted hover:text-ink md:hidden" aria-label="Cerrar menú">
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-3 overflow-y-auto overflow-x-hidden">
           {NAV.map((group, gi) => (
             <div key={gi}>
-              {!collapsed && group.label && (
-                <p className="px-3 pb-1 text-[10px] font-medium text-muted/70 uppercase tracking-wider">{group.label}</p>
+              {group.label && (
+                <p className={`px-3 pb-1 text-[10px] font-medium text-muted/70 uppercase tracking-wider ${collapsed ? 'md:hidden' : ''}`}>
+                  {group.label}
+                </p>
               )}
               <div className="space-y-0.5">
                 {group.items.map((item) => (
-                  <SidebarLink key={item.to} item={item} collapsed={collapsed} badge={badgeFor(item.badgeKey)} />
+                  <SidebarLink key={item.to} item={item} collapsed={collapsed} badge={badgeFor(item.badgeKey)} onNavigate={() => setMobileOpen(false)} />
                 ))}
               </div>
             </div>
@@ -131,15 +142,16 @@ export function AppLayout() {
             <div className="border-t border-border pt-3">
               <NavLink
                 to="/platform"
+                onClick={() => setMobileOpen(false)}
                 title={collapsed ? 'Plataforma (todas las cuentas)' : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                     isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
-                  } ${collapsed ? 'justify-center' : ''}`
+                  } ${collapsed ? 'md:justify-center' : ''}`
                 }
               >
                 <Building2 size={16} strokeWidth={2} className="shrink-0" />
-                {!collapsed && 'Plataforma (todas las cuentas)'}
+                <span className={collapsed ? 'md:hidden' : ''}>Plataforma (todas las cuentas)</span>
               </NavLink>
             </div>
           )}
@@ -147,7 +159,7 @@ export function AppLayout() {
 
         <button
           onClick={toggleSidebar}
-          className="flex items-center justify-center gap-1.5 border-t border-border py-2.5 text-muted hover:text-ink transition-colors text-xs"
+          className="hidden md:flex items-center justify-center gap-1.5 border-t border-border py-2.5 text-muted hover:text-ink transition-colors text-xs"
         >
           {collapsed ? <ChevronRight size={14} /> : (
             <>
@@ -157,17 +169,16 @@ export function AppLayout() {
         </button>
 
         <div className="border-t border-border p-3">
-          <div className={`flex items-center py-2 ${collapsed ? 'justify-center' : 'justify-between px-2'}`}>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className="text-sm truncate">{user?.firstName} {user?.lastName}</p>
-                <p className="text-xs text-muted truncate">{user?.roles?.join(', ') || (user?.isPlatformAdmin ? 'Dueño de la plataforma' : '')}</p>
-              </div>
-            )}
+          <div className={`flex items-center py-2 justify-between px-2 ${collapsed ? 'md:justify-center' : ''}`}>
+            <div className={`min-w-0 ${collapsed ? 'md:hidden' : ''}`}>
+              <p className="text-sm truncate">{user?.firstName} {user?.lastName}</p>
+              <p className="text-xs text-muted truncate">{user?.roles?.join(', ') || (user?.isPlatformAdmin ? 'Dueño de la plataforma' : '')}</p>
+            </div>
             <button
               onClick={clearSession}
               className="text-muted hover:text-critical transition-colors shrink-0"
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
               <LogOut size={16} />
             </button>
@@ -176,7 +187,14 @@ export function AppLayout() {
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <Topbar user={user} alertCount={alertCount} summary={summary} onNavigate={navigate} onLogout={clearSession} />
+        <Topbar
+          user={user}
+          alertCount={alertCount}
+          summary={summary}
+          onNavigate={navigate}
+          onLogout={clearSession}
+          onOpenMobileNav={() => setMobileOpen(true)}
+        />
         <main className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />
         </main>
@@ -185,27 +203,40 @@ export function AppLayout() {
   );
 }
 
-function SidebarLink({ item, collapsed, badge }: { item: NavItem; collapsed: boolean; badge: number }) {
+function SidebarLink({
+  item,
+  collapsed,
+  badge,
+  onNavigate,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  badge: number;
+  onNavigate: () => void;
+}) {
   const Icon = item.icon;
   return (
     <NavLink
       to={item.to}
+      onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         `flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
           isActive ? 'bg-surface-raised text-ink' : 'text-muted hover:text-ink hover:bg-surface-raised/60'
-        } ${collapsed ? 'justify-center px-0' : ''}`
+        } ${collapsed ? 'md:justify-center md:px-0' : ''}`
       }
     >
-      <span className={`flex items-center gap-2.5 min-w-0 ${collapsed ? '' : 'flex-1'}`}>
+      <span className={`flex items-center gap-2.5 min-w-0 ${collapsed ? 'md:flex-none' : 'flex-1'}`}>
         <Icon size={16} strokeWidth={2} className="shrink-0" />
-        {!collapsed && <span className="truncate">{item.label}</span>}
+        <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>{item.label}</span>
       </span>
-      {!collapsed && !item.live && (
-        <span className="text-[10px] text-muted/70 border border-border rounded px-1.5 py-0.5 shrink-0">pronto</span>
+      {!item.live && (
+        <span className={`text-[10px] text-muted/70 border border-border rounded px-1.5 py-0.5 shrink-0 ${collapsed ? 'md:hidden' : ''}`}>pronto</span>
       )}
-      {!collapsed && item.live && badge > 0 && (
-        <span className="text-[10px] font-medium bg-critical/15 text-critical rounded-full px-1.5 py-0.5 shrink-0">{badge}</span>
+      {item.live && badge > 0 && (
+        <span className={`text-[10px] font-medium bg-critical/15 text-critical rounded-full px-1.5 py-0.5 shrink-0 ${collapsed ? 'md:hidden' : ''}`}>
+          {badge}
+        </span>
       )}
     </NavLink>
   );
@@ -217,12 +248,14 @@ function Topbar({
   summary,
   onNavigate,
   onLogout,
+  onOpenMobileNav,
 }: {
   user: ReturnType<typeof useAuthStore.getState>['user'];
   alertCount: number;
   summary: Summary | null;
   onNavigate: (path: string) => void;
   onLogout: () => void;
+  onOpenMobileNav: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
@@ -261,7 +294,10 @@ function Topbar({
   const oltOnline = summary?.oltOnline?.value ?? null;
 
   return (
-    <header className="h-16 shrink-0 border-b border-border bg-surface/60 backdrop-blur flex items-center gap-4 px-6">
+    <header className="h-16 shrink-0 border-b border-border bg-surface/60 backdrop-blur flex items-center gap-4 px-4 md:px-6">
+      <button onClick={onOpenMobileNav} className="text-muted hover:text-ink md:hidden shrink-0" aria-label="Abrir menú">
+        <Menu size={20} />
+      </button>
       <div ref={searchRef} className="relative flex-1 max-w-md">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
         <input
@@ -320,6 +356,7 @@ function Topbar({
           <button
             onClick={() => setNotifOpen((v) => !v)}
             className="relative text-muted hover:text-ink p-2 rounded-md hover:bg-surface-raised transition-colors"
+            aria-label="Alertas"
           >
             <Bell size={17} />
             {alertCount > 0 && (
@@ -361,6 +398,7 @@ function Topbar({
           <button
             onClick={() => setProfileOpen((v) => !v)}
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md hover:bg-surface-raised transition-colors"
+            aria-label="Menú de usuario"
           >
             <span className="h-7 w-7 rounded-full bg-signal/20 text-signal flex items-center justify-center text-xs font-medium shrink-0">
               {(user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')}

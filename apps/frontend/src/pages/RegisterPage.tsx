@@ -56,7 +56,7 @@ export function RegisterPage() {
             placeholder="ej. fibraveloz"
             {...field('slug')}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Tu nombre" required {...field('firstName')} />
             <Field label="Tu apellido" required {...field('lastName')} />
           </div>

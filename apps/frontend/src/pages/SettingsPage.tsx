@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 import { api } from '../lib/api';
 import { useUIStore, ACCENT_OPTIONS } from '../store/ui.store';
 import { useToast } from '../components/Toast';
@@ -10,6 +11,8 @@ export function SettingsPage() {
   const [rxCritical, setRxCritical] = useState('-28');
   const accent = useUIStore((s) => s.accent);
   const setAccent = useUIStore((s) => s.setAccent);
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
   const toast = useToast();
 
   useEffect(() => {
@@ -40,7 +43,27 @@ export function SettingsPage() {
 
       <div className="status-panel status-panel--neutral space-y-3">
         <p className="text-sm font-medium">Apariencia</p>
-        <p className="text-xs text-muted">Color principal de la interfaz — se aplica al instante para todos tus usuarios en este navegador.</p>
+        <p className="text-xs text-muted">Tema y color principal — se aplican al instante en este navegador.</p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTheme('dark')}
+            className={`flex items-center gap-2 border rounded-md px-3 py-1.5 text-xs transition-colors ${
+              theme === 'dark' ? 'border-signal text-ink bg-surface-raised' : 'border-border text-muted hover:text-ink'
+            }`}
+          >
+            <Moon size={12} /> Oscuro
+          </button>
+          <button
+            onClick={() => setTheme('light')}
+            className={`flex items-center gap-2 border rounded-md px-3 py-1.5 text-xs transition-colors ${
+              theme === 'light' ? 'border-signal text-ink bg-surface-raised' : 'border-border text-muted hover:text-ink'
+            }`}
+          >
+            <Sun size={12} /> Claro
+          </button>
+        </div>
+
         <div className="flex flex-wrap gap-2 pt-1">
           {ACCENT_OPTIONS.map((opt) => (
             <button
@@ -62,13 +85,13 @@ export function SettingsPage() {
 
       <div className="status-panel status-panel--neutral space-y-4">
         <p className="text-sm font-medium">Motor de suspensión</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Días de gracia" value={graceDays} onChange={setGraceDays} />
           <Field label="Avisar N días antes" value={notifyDays} onChange={setNotifyDays} />
         </div>
 
         <p className="text-sm font-medium pt-2 border-t border-border">Umbrales de señal óptica (configurables, no universales)</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="RX advertencia (dBm)" value={rxWarn} onChange={setRxWarn} />
           <Field label="RX crítico (dBm)" value={rxCritical} onChange={setRxCritical} />
         </div>

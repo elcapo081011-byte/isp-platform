@@ -29,7 +29,7 @@ export function PlatformAdminPage() {
       </p>
 
       {summary && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="status-panel status-panel--neutral">
             <p className="text-xs text-muted mb-1">Organizaciones</p>
             <p className="text-2xl font-display font-bold">{summary.totalOrganizations}</p>

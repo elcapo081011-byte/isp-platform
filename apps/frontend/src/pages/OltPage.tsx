@@ -145,7 +145,7 @@ export function OltPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-6xl page-enter">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold mb-1">OLT</h1>
@@ -162,7 +162,7 @@ export function OltPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="space-y-2">
           {loading ? (
             <p className="text-muted text-sm">Cargando…</p>
@@ -229,7 +229,7 @@ export function OltPage() {
               ) : (
                 <div>
                   <p className="text-xs font-medium text-muted mb-2 uppercase tracking-wide">Puertos PON</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {ponData.ponPorts.map((p) => (
                       <div key={p.ponId} className={`status-panel ${p.status === 'ONLINE' ? 'status-panel--ok' : 'status-panel--critical'}`}>
                         <p className="font-medium">PON {p.ponId}</p>
@@ -305,7 +305,7 @@ export function OltPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass()}>Fabricante</label>
                   <select
@@ -415,7 +415,7 @@ export function OltPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass()}>MAC (opcional)</label>
                   <input

@@ -2,9 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root[data-theme='light'] {
+  --base: #F3F5F7;
+  --surface: #FFFFFF;
+  --surface-raised: #F3F5F8;
+  --border: #E1E6EB;
+  --muted: #6B7684;
+  --ink: #10151B;
+}
+
 @layer base {
   body {
     @apply bg-base text-ink font-body antialiased;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
   h1, h2, h3, h4 {
     @apply font-display;
@@ -15,12 +25,33 @@
   /* Panel de estado: el borde izquierdo codifica la severidad en vez de
      usar el mismo shadow-de-tarjeta genérico en todo. */
   .status-panel {
-    @apply bg-surface border border-border border-l-[3px] rounded-md p-5;
+    @apply bg-surface border border-border border-l-[3px] rounded-md p-5 transition-[transform,box-shadow,border-color] duration-150;
   }
   .status-panel--ok { @apply border-l-ok; }
   .status-panel--warn { @apply border-l-warn; }
   .status-panel--critical { @apply border-l-critical; }
   .status-panel--neutral { @apply border-l-border; }
+
+  /* Vidrio esmerilado sutil para topbar/paneles flotantes — muy ligero, no
+     satura el fondo, y funciona igual en claro y oscuro. */
+  .glass {
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Tarjetas interactivas (links a otras vistas): leve elevación al pasar
+     el mouse, nunca un salto brusco. */
+  .lift-on-hover {
+    @apply transition-transform duration-150 ease-out;
+  }
+  .lift-on-hover:hover {
+    transform: translateY(-1px);
+  }
+
+  .skeleton {
+    @apply bg-surface-raised rounded animate-pulse;
+  }
 }
 
 @keyframes toast-in {
@@ -28,10 +59,26 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-in 0.18s ease-out;
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.drawer-enter {
+  animation: drawer-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 * {
   scrollbar-width: thin;
-  scrollbar-color: #232B35 transparent;
+  scrollbar-color: var(--border) transparent;
 }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #232B35; border-radius: 999px; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 *::-webkit-scrollbar-track { background: transparent; }

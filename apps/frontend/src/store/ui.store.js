@@ -11,9 +11,14 @@ function applyAccent(accent) {
     root.style.setProperty('--signal', preset.DEFAULT);
     root.style.setProperty('--signal-dim', preset.dim);
 }
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+}
 const storedCollapsed = localStorage.getItem('isp_sidebar_collapsed') === '1';
 const storedAccent = localStorage.getItem('isp_accent') || 'teal';
+const storedTheme = localStorage.getItem('isp_theme') || 'dark';
 applyAccent(storedAccent);
+applyTheme(storedTheme);
 export const useUIStore = create((set, get) => ({
     sidebarCollapsed: storedCollapsed,
     toggleSidebar: () => {
@@ -26,6 +31,12 @@ export const useUIStore = create((set, get) => ({
         localStorage.setItem('isp_accent', accent);
         applyAccent(accent);
         set({ accent });
+    },
+    theme: storedTheme,
+    setTheme: (theme) => {
+        localStorage.setItem('isp_theme', theme);
+        applyTheme(theme);
+        set({ theme });
     },
 }));
 export const ACCENT_OPTIONS = [

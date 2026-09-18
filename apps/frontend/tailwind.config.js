@@ -9,12 +9,12 @@ export default {
         body: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        base: '#0B1016',
-        surface: '#12181F',
-        'surface-raised': '#171F28',
-        border: '#232B35',
-        muted: '#7C8792',
-        ink: '#E7ECF1',
+        base: 'var(--base, #0B1016)',
+        surface: 'var(--surface, #12181F)',
+        'surface-raised': 'var(--surface-raised, #171F28)',
+        border: 'var(--border, #232B35)',
+        muted: 'var(--muted, #7C8792)',
+        ink: 'var(--ink, #E7ECF1)',
         signal: {
           DEFAULT: 'var(--signal, #1FB6A6)',
           dim: 'var(--signal-dim, #164F49)',

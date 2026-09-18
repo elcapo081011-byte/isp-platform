@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function Logomark({ size = 22 }) {
+    return (_jsxs("svg", { width: size, height: size, viewBox: "0 0 32 32", fill: "none", xmlns: "http://www.w3.org/2000/svg", children: [_jsx("rect", { x: "1", y: "1", width: "30", height: "30", rx: "9", stroke: "var(--signal)", strokeWidth: "1.5", opacity: "0.35" }), _jsx("circle", { cx: "16", cy: "16", r: "3.4", fill: "var(--signal)" }), _jsx("path", { d: "M10.5 21.5a8 8 0 0 1 0-11", stroke: "var(--signal)", strokeWidth: "2", strokeLinecap: "round", opacity: "0.9" }), _jsx("path", { d: "M21.5 21.5a8 8 0 0 0 0-11", stroke: "var(--signal)", strokeWidth: "2", strokeLinecap: "round" }), _jsx("path", { d: "M7 25a12.5 12.5 0 0 1 0-18", stroke: "var(--signal)", strokeWidth: "1.5", strokeLinecap: "round", opacity: "0.45" })] }));
+}

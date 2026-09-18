@@ -111,7 +111,7 @@ export function MikrotikPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-6xl page-enter">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold mb-1">MikroTik</h1>
@@ -135,7 +135,7 @@ export function MikrotikPage() {
           usuario y contraseña de la API de RouterOS (Winbox → IP → Services → api, puerto 8728 por defecto).
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {routers.map((r) => (
             <div
               key={r.id}
@@ -211,7 +211,7 @@ export function MikrotikPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <label className={labelClass()}>Dirección IP</label>
                   <input
@@ -233,7 +233,7 @@ export function MikrotikPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass()}>Usuario</label>
                   <input

@@ -28,7 +28,7 @@ export function ToastProvider({ children }) {
     };
     return (_jsxs(ToastContext.Provider, { value: value, children: [children, _jsx("div", { className: "fixed bottom-5 right-5 z-[100] flex flex-col gap-2 w-80 max-w-[90vw]", children: toasts.map((t) => {
                     const { icon: Icon, className } = VARIANT_STYLES[t.variant];
-                    return (_jsxs("div", { className: `bg-surface border border-border border-l-[3px] rounded-md shadow-lg px-3.5 py-3 flex items-start gap-2.5 animate-[toast-in_0.18s_ease-out] ${className}`, children: [_jsx(Icon, { size: 16, className: "shrink-0 mt-0.5" }), _jsx("p", { className: "text-sm text-ink flex-1 leading-snug", children: t.message }), _jsx("button", { onClick: () => dismiss(t.id), className: "text-muted hover:text-ink shrink-0", children: _jsx(X, { size: 14 }) })] }, t.id));
+                    return (_jsxs("div", { className: `bg-surface border border-border border-l-[3px] rounded-md shadow-lg px-3.5 py-3 flex items-start gap-2.5 animate-[toast-in_0.18s_ease-out] ${className}`, children: [_jsx(Icon, { size: 16, className: "shrink-0 mt-0.5" }), _jsx("p", { className: "text-sm text-ink flex-1 leading-snug", children: t.message }), _jsx("button", { onClick: () => dismiss(t.id), className: "text-muted hover:text-ink shrink-0", "aria-label": "Cerrar notificaci\u00F3n", children: _jsx(X, { size: 14 }) })] }, t.id));
                 }) })] }));
 }
 export function useToast() {
