@@ -22,11 +22,13 @@ maqueta visual.
       `docs/SEGURIDAD.md`), diseño del portal del cliente (`docs/PORTAL_CLIENTE.md` — no
       implementado, tal como el brief original lo pidió como paso posterior).
 - [x] **Fase 13** — Facturación SaaS de la plataforma (lo que el dueño de la plataforma le
-      cobra a cada ISP, no lo que cada ISP le cobra a sus clientes): límite de clientes
-      gratis por organización, facturación mensual automática por cliente excedente,
-      vencimiento y suspensión automática de la cuenta por falta de pago (mismo motor de
-      cron que la Fase 3), y reactivación al pagar. El único método de pago real hoy es
-      manual (el dueño de la plataforma marca la factura como pagada); conectar un gateway
+      cobra a cada ISP, no lo que cada ISP le cobra a sus clientes): escalones de precio fijo
+      mensual calcados de los planes reales de WispHub (gratis hasta 15 clientes, luego
+      escalones de pago por rango de clientes — ver `PLATFORM_TIERS` en
+      `platform-billing.service.ts`), facturación mensual automática según el escalón que
+      corresponda, vencimiento y suspensión automática de la cuenta por falta de pago (mismo
+      motor de cron que la Fase 3), y reactivación al pagar. El único método de pago real hoy
+      es manual (el dueño de la plataforma marca la factura como pagada); conectar un gateway
       automático (Stripe/MercadoPago/etc.) queda pendiente de definir país y proveedor —
       declarado explícitamente, no simulado.
 
