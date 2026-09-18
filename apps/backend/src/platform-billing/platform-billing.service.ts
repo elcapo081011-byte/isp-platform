@@ -154,8 +154,10 @@ export class PlatformBillingService {
 
   // -- Ciclo automático (igual patrón que SuspensionEngineService) --------
 
-  // El día 1 de cada mes se factura el uso del mes anterior.
-  @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_7AM)
+  // El día 1 de cada mes a las 7am se factura el uso del mes anterior.
+  // (CronExpression no trae un miembro para "1er día a las 7am" — se usa la
+  // expresión cron directa: minuto 0, hora 7, día 1 del mes, cualquier mes/día de semana.)
+  @Cron('0 7 1 * *')
   async generateMonthlyInvoices() {
     const organizations = await this.prisma.organization.findMany();
     const period = this.previousPeriod();
