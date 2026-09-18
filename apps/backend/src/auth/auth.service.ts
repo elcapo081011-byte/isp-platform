@@ -62,8 +62,11 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+
       const organization = await tx.organization.create({
-        data: { name: dto.organizationName, slug },
+        data: { name: dto.organizationName, slug, trialEndsAt },
       });
 
       // Permisos y rol SUPER_ADMIN son globales al motor (no por organización),

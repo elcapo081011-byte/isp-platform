@@ -66,6 +66,11 @@ export class NotificationsService {
         return `Hola ${name}, tu servicio fue suspendido por falta de pago de la factura ${params.payload.invoiceNumber}.`;
       case 'customer.reactivated':
         return `Hola ${name}, tu servicio ha sido reactivado. ¡Gracias por tu pago!`;
+      case 'platform_invoice.issued':
+      case 'platform_invoice.overdue':
+      case 'platform.suspended_nonpayment':
+      case 'platform.reactivated':
+        return `Hola ${name}, ${params.payload.message}`;
       default:
         return `Evento: ${params.event}`;
     }

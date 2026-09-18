@@ -17,6 +17,7 @@ import { SettingsModule } from './settings/settings.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { BackupsModule } from './backups/backups.module';
 import { PlatformModule } from './platform/platform.module';
+import { PlatformBillingModule } from './platform-billing/platform-billing.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PlatformModule } from './platform/platform.module';
     ApiKeysModule,
     BackupsModule,
     PlatformModule,
+    PlatformBillingModule,
   ],
 })
 export class AppModule {}
