@@ -6,11 +6,11 @@ interface Usage {
   plan: string;
   isActive: boolean;
   clientCount: number;
-  freeClientLimit: number;
-  billableClients: number;
-  pricePerExtraClient: number;
+  tier: string;
+  tierMaxClients: number | null;
+  monthlyPrice: number;
   currency: string;
-  estimatedAmount: number;
+  nextTier: { name: string; maxClients: number | null; monthlyPrice: number } | null;
   isTrial: boolean;
   trialEndsAt: string | null;
   trialDaysLeft: number | null;
@@ -20,8 +20,7 @@ interface PlatformInvoice {
   id: string;
   period: string;
   clientCount: number;
-  freeLimit: number;
-  billableClients: number;
+  tier: string;
   amount: string;
   currency: string;
   status: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
@@ -70,7 +69,8 @@ export function SubscriptionPage() {
     );
   }
 
-  const usagePct = Math.min(100, Math.round((usage.clientCount / usage.freeClientLimit) * 100));
+  const cap = usage.tierMaxClients ?? usage.clientCount || 1;
+  const usagePct = Math.min(100, Math.round((usage.clientCount / cap) * 100));
   const hasOverdue = invoices.some((i) => i.status === 'OVERDUE');
 
   return (
@@ -105,25 +105,28 @@ export function SubscriptionPage() {
       <div className="border border-border rounded-md p-5 mb-6">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium">Uso este mes</p>
-          <span className="text-xs text-muted">Plan {usage.plan}</span>
+          <span className="text-xs text-muted">Plan {usage.tier}</span>
         </div>
         <div className="flex items-end justify-between mb-2">
           <p className="text-3xl font-display font-bold">{usage.clientCount}</p>
-          <p className="text-xs text-muted">de {usage.freeClientLimit} clientes gratis</p>
+          <p className="text-xs text-muted">
+            {usage.tierMaxClients ? `de ${usage.tierMaxClients} clientes en el plan ${usage.tier}` : 'clientes (plan sin límite)'}
+          </p>
         </div>
         <div className="h-2 w-full bg-surface-raised rounded-full overflow-hidden mb-3">
-          <div
-            className={`h-full rounded-full ${usage.clientCount > usage.freeClientLimit ? 'bg-warn' : 'bg-signal'}`}
-            style={{ width: `${usagePct}%` }}
-          />
+          <div className={`h-full rounded-full ${usage.monthlyPrice > 0 ? 'bg-signal' : 'bg-ok'}`} style={{ width: `${usagePct}%` }} />
         </div>
-        {usage.billableClients > 0 ? (
+        {usage.monthlyPrice > 0 ? (
           <p className="text-sm text-muted">
-            Tienes {usage.billableClients} cliente(s) por encima del límite gratis. Al cierre del mes se factura{' '}
-            {usage.currency} {usage.pricePerExtraClient.toFixed(2)} por cada uno — estimado: <strong>{usage.currency} {usage.estimatedAmount.toFixed(2)}</strong>.
+            Tu plan {usage.tier} cuesta <strong>{usage.currency} {usage.monthlyPrice.toFixed(2)}/mes</strong>.
           </p>
         ) : (
-          <p className="text-sm text-muted">Estás dentro del límite gratis — no se genera cobro este mes.</p>
+          <p className="text-sm text-muted">Estás en el plan gratis — no se genera cobro este mes.</p>
+        )}
+        {usage.nextTier && (
+          <p className="text-xs text-muted mt-1">
+            Si superas los {usage.tierMaxClients} clientes, pasas al plan {usage.nextTier.name} ({usage.currency} {usage.nextTier.monthlyPrice.toFixed(2)}/mes).
+          </p>
         )}
       </div>
 
@@ -138,7 +141,7 @@ export function SubscriptionPage() {
             <thead className="bg-surface text-muted text-xs">
               <tr>
                 <th className="text-left px-4 py-2">Período</th>
-                <th className="text-left px-4 py-2">Clientes</th>
+                <th className="text-left px-4 py-2">Plan</th>
                 <th className="text-left px-4 py-2">Monto</th>
                 <th className="text-left px-4 py-2">Vence</th>
                 <th className="text-left px-4 py-2">Estado</th>
@@ -148,7 +151,7 @@ export function SubscriptionPage() {
               {invoices.map((inv) => (
                 <tr key={inv.id} className="border-t border-border">
                   <td className="px-4 py-2">{inv.period}</td>
-                  <td className="px-4 py-2 text-muted">{inv.clientCount} ({inv.billableClients} facturable{inv.billableClients === 1 ? '' : 's'})</td>
+                  <td className="px-4 py-2 text-muted">{inv.tier} ({inv.clientCount} clientes)</td>
                   <td className="px-4 py-2">{inv.currency} {Number(inv.amount).toFixed(2)}</td>
                   <td className="px-4 py-2 text-muted">{new Date(inv.dueDate).toLocaleDateString('es')}</td>
                   <td className={`px-4 py-2 font-medium ${STATUS_CLASS[inv.status]}`}>{STATUS_LABEL[inv.status]}</td>

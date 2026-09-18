@@ -8,7 +8,7 @@ interface PlatformInvoice {
   organization: { name: string; slug: string };
   period: string;
   clientCount: number;
-  billableClients: number;
+  tier: string;
   amount: string;
   currency: string;
   status: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
@@ -90,7 +90,8 @@ export function PlatformBillingPage() {
             <tr>
               <th className="text-left px-4 py-3">Organización</th>
               <th className="text-left px-4 py-3">Período</th>
-              <th className="text-left px-4 py-3">Clientes facturables</th>
+              <th className="text-left px-4 py-3">Plan</th>
+              <th className="text-left px-4 py-3">Clientes</th>
               <th className="text-left px-4 py-3">Monto</th>
               <th className="text-left px-4 py-3">Vence</th>
               <th className="text-left px-4 py-3">Estado</th>
@@ -110,7 +111,8 @@ export function PlatformBillingPage() {
                   <p className="text-xs text-muted">{inv.organization.slug}</p>
                 </td>
                 <td className="px-4 py-3 text-muted">{inv.period}</td>
-                <td className="px-4 py-3">{inv.billableClients}</td>
+                <td className="px-4 py-3">{inv.tier}</td>
+                <td className="px-4 py-3 text-muted">{inv.clientCount}</td>
                 <td className="px-4 py-3">{inv.currency} {Number(inv.amount).toFixed(2)}</td>
                 <td className="px-4 py-3 text-muted">{new Date(inv.dueDate).toLocaleDateString('es')}</td>
                 <td className={`px-4 py-3 font-medium ${STATUS_CLASS[inv.status]}`}>
