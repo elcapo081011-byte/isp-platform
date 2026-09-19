@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity } from 'lucide-react';
+import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Router } from '../lib/types';
 import { useToast } from '../components/Toast';
@@ -29,9 +29,11 @@ export function MikrotikPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [detail, setDetail] = useState<Router | null>(null);
   const [sessions, setSessions] = useState<any[] | null>(null);
@@ -64,7 +66,23 @@ export function MikrotikPage() {
   }
 
   function openCreate() {
+    setEditingId(null);
     setForm(EMPTY_FORM);
+    setError(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(r: Router) {
+    setEditingId(r.id);
+    setForm({
+      name: r.name,
+      host: r.host,
+      port: String(r.port ?? 8728),
+      username: r.username,
+      password: '', // se deja vacía: si no se toca, se conserva la actual
+      useTls: r.useTls ?? false,
+      location: r.location ?? '',
+    });
     setError(null);
     setModalOpen(true);
   }
@@ -74,22 +92,47 @@ export function MikrotikPage() {
     setSaving(true);
     setError(null);
     try {
-      await api.post('/mikrotik/routers', {
+      const payload: any = {
         name: form.name,
         host: form.host,
         port: form.port ? Number(form.port) : undefined,
         username: form.username,
-        password: form.password,
         useTls: form.useTls,
         location: form.location || undefined,
-      });
+      };
+      // En edición, solo se manda la contraseña si el usuario escribió una nueva.
+      if (!editingId || form.password) {
+        payload.password = form.password;
+      }
+
+      if (editingId) {
+        await api.patch(`/mikrotik/routers/${editingId}`, payload);
+        toast.success('Router actualizado.');
+      } else {
+        await api.post('/mikrotik/routers', payload);
+        toast.success('Router agregado. Verificando conexión…');
+      }
       setModalOpen(false);
-      toast.success('Router agregado. Verificando conexión…');
       await load();
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'No se pudo guardar el router. Verifica los datos de conexión.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove(r: Router) {
+    const confirmed = window.confirm(`¿Eliminar el router "${r.name}"? Los clientes que lo usaban quedarán sin router asignado.`);
+    if (!confirmed) return;
+    setDeletingId(r.id);
+    try {
+      await api.delete(`/mikrotik/routers/${r.id}`);
+      toast.success('Router eliminado.');
+      await load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'No se pudo eliminar el router.');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -157,7 +200,7 @@ export function MikrotikPage() {
                 <p className="text-[11px] text-critical mt-2">{r.lastError}</p>
               )}
 
-              <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-4 mt-3 flex-wrap">
                 <button
                   onClick={() => check(r.id)}
                   disabled={checking === r.id}
@@ -172,6 +215,21 @@ export function MikrotikPage() {
                 >
                   <Activity size={12} />
                   Ver detalle
+                </button>
+                <button
+                  onClick={() => openEdit(r)}
+                  className="flex items-center gap-1.5 text-xs text-muted hover:text-ink"
+                >
+                  <Pencil size={12} />
+                  Editar
+                </button>
+                <button
+                  onClick={() => remove(r)}
+                  disabled={deletingId === r.id}
+                  className="flex items-center gap-1.5 text-xs text-critical hover:underline disabled:opacity-50"
+                >
+                  <Trash2 size={12} />
+                  {deletingId === r.id ? 'Eliminando…' : 'Eliminar'}
                 </button>
               </div>
 
@@ -189,7 +247,7 @@ export function MikrotikPage() {
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-surface border border-border rounded-lg shadow-2xl">
             <div className="flex items-start justify-between border-b border-border px-6 py-4">
               <div>
-                <h2 className="font-display font-bold text-lg">Agregar router MikroTik</h2>
+                <h2 className="font-display font-bold text-lg">{editingId ? 'Editar router MikroTik' : 'Agregar router MikroTik'}</h2>
                 <p className="text-xs text-muted mt-0.5">La contraseña se guarda cifrada, nunca en texto plano.</p>
               </div>
               <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink p-1 -mr-1 -mt-1" aria-label="Cerrar">
@@ -245,9 +303,9 @@ export function MikrotikPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelClass()}>Contraseña</label>
+                  <label className={labelClass()}>Contraseña {editingId && <span className="text-muted/60">(dejar en blanco para no cambiarla)</span>}</label>
                   <input
-                    required
+                    required={!editingId}
                     type="password"
                     autoComplete="new-password"
                     value={form.password}
@@ -286,7 +344,7 @@ export function MikrotikPage() {
                   disabled={saving}
                   className="bg-signal text-base text-sm font-medium rounded-md px-5 py-2 disabled:opacity-50"
                 >
-                  {saving ? 'Guardando…' : 'Guardar router'}
+                  {saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Guardar router'}
                 </button>
               </div>
             </form>
