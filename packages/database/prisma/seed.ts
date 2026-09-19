@@ -100,7 +100,7 @@ async function main() {
       lastName: 'de la Plataforma',
       passwordHash: platformAdminPasswordHash,
       isPlatformAdmin: true,
-      isDemo: true,
+      isDemo: false, // esta cuenta es real y permanente — NO se borra con los usuarios demo
     },
   });
 

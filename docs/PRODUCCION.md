@@ -9,7 +9,11 @@
    Let's Encrypt, o un balanceador gestionado). El `nginx.conf` incluido es
    de desarrollo/LAN; en producción se le agrega el bloque `ssl_certificate`.
 3. **Usuarios demo**: cambiar o eliminar los tres usuarios `isDemo: true` del
-   seed antes de dar acceso a personal real.
+   seed antes de dar acceso a personal real. La cuenta del dueño de la
+   plataforma (`platform-owner@isp-control.local`, contraseña por defecto
+   `PlatformAdmin123!`) NO es una cuenta demo — es tu acceso real como dueño
+   del sistema; solo cámbiale la contraseña en cuanto entres, desde
+   Configuración → "Cambiar mi contraseña", no la borres.
 4. **Backups**: confirmar que `BACKUP_DIR` apunta a un volumen persistente
    (no efímero del contenedor) y, idealmente, replicar esos archivos a
    almacenamiento externo (S3, otro servidor) — el sistema los genera

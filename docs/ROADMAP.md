@@ -32,6 +32,16 @@ maqueta visual.
       automático (Stripe/MercadoPago/etc.) queda pendiente de definir país y proveedor —
       declarado explícitamente, no simulado.
 
+- [x] **Fase 14** — Gestión de usuarios (el permiso `users.manage` existía desde el
+      principio pero nunca se había construido el endpoint, por eso no se podía crear un
+      usuario nuevo dentro de una cuenta): alta de usuarios con roles, activar/desactivar,
+      cambiar roles — todo dentro de tu propia organización. Además, cuenta real del dueño
+      de la plataforma (sembrada por `npm run seed`, ver `docs/PRODUCCION.md`), que al
+      iniciar sesión entra directo al panel de Plataforma sin ver el menú operativo de un
+      ISP. También se agregó la tabla completa de planes visible en "Mi suscripción" con un
+      botón "Quiero este plan" (deja una solicitud registrada y te avisa por correo, ya que
+      todavía no hay cobro automático con tarjeta).
+
 ## Lo que queda fuera de este ciclo, honestamente
 
 - Drivers OLT específicos por fabricante (requieren documentación oficial del cliente).
