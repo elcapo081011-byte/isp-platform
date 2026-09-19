@@ -84,20 +84,42 @@ async function main() {
   }
 
   console.log('🌱 Sembrando cuenta del dueño de la plataforma (isPlatformAdmin)...');
+
+  // El usuario y contraseña del dueño de la plataforma NUNCA se hardcodean.
+  // Deben venir de tu propio .env (PLATFORM_OWNER_EMAIL / PLATFORM_OWNER_PASSWORD).
+  // Si faltan, el seed se detiene aquí en vez de crear una cuenta genérica.
+  const platformOwnerEmail = process.env.PLATFORM_OWNER_EMAIL;
+  const platformOwnerPassword = process.env.PLATFORM_OWNER_PASSWORD;
+  const platformOwnerFirstName = process.env.PLATFORM_OWNER_FIRST_NAME || 'Dueño';
+  const platformOwnerLastName = process.env.PLATFORM_OWNER_LAST_NAME || 'de la Plataforma';
+
+  if (!platformOwnerEmail || !platformOwnerPassword) {
+    throw new Error(
+      '❌ Faltan PLATFORM_OWNER_EMAIL y/o PLATFORM_OWNER_PASSWORD en tu .env.\n' +
+        '   Defínelos con TU propio email y una contraseña fuerte real antes de correr el seed.\n' +
+        '   Ejemplo en .env:\n' +
+        '     PLATFORM_OWNER_EMAIL=tuemail@tudominio.com\n' +
+        '     PLATFORM_OWNER_PASSWORD=UnaContraseñaLargaYUnica#2026',
+    );
+  }
+  if (platformOwnerPassword.length < 12) {
+    throw new Error('❌ PLATFORM_OWNER_PASSWORD es muy corta. Usa 12+ caracteres, con mayúsculas, números y símbolos.');
+  }
+
   const platformOrg = await prisma.organization.upsert({
     where: { slug: 'platform' },
     update: {},
     create: { name: 'Plataforma (interno)', slug: 'platform', plan: 'INTERNAL' },
   });
-  const platformAdminPasswordHash = await bcrypt.hash('PlatformAdmin123!', 12);
+  const platformAdminPasswordHash = await bcrypt.hash(platformOwnerPassword, 12);
   await prisma.user.upsert({
-    where: { email: 'platform-owner@isp-control.local' },
+    where: { email: platformOwnerEmail },
     update: {},
     create: {
       organizationId: platformOrg.id,
-      email: 'platform-owner@isp-control.local',
-      firstName: 'Dueño',
-      lastName: 'de la Plataforma',
+      email: platformOwnerEmail,
+      firstName: platformOwnerFirstName,
+      lastName: platformOwnerLastName,
       passwordHash: platformAdminPasswordHash,
       isPlatformAdmin: true,
       isDemo: false, // esta cuenta es real y permanente — NO se borra con los usuarios demo
@@ -203,7 +225,7 @@ async function main() {
   console.log('✅ Seed completado.');
   console.log(`   Organización demo: "${organization.name}" (slug: ${organization.slug})`);
   console.log('   Usuarios demo — contraseña por defecto: ChangeMe123! (cámbiala de inmediato)');
-  console.log('   Dueño de la plataforma: platform-owner@isp-control.local / PlatformAdmin123!');
+  console.log(`   Dueño de la plataforma: ${platformOwnerEmail} (contraseña: la que pusiste en .env)`);
   console.log('   Para probar el multi-tenant real, usa POST /api/v1/auth/register para crear otra organización.');
 }
 
