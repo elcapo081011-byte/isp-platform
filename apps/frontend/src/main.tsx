@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 import { AppLayout } from './layouts/AppLayout';
 import { RequireAuth } from './lib/RequireAuth';
-import { useAuthStore } from './store/auth.store';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmDialog';
 
@@ -26,9 +25,10 @@ const InventoryPage = lazy(() => import('./pages/InventoryPage').then((m) => ({ 
 const MonitoringPage = lazy(() => import('./pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage })));
 const NapMapPage = lazy(() => import('./pages/NapMapPage').then((m) => ({ default: m.NapMapPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
-const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const PlatformAdminPage = lazy(() => import('./pages/PlatformAdminPage').then((m) => ({ default: m.PlatformAdminPage })));
 const PlatformBillingPage = lazy(() => import('./pages/PlatformBillingPage').then((m) => ({ default: m.PlatformBillingPage })));
+const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
+const PlatformUsersPage = lazy(() => import('./pages/PlatformUsersPage').then((m) => ({ default: m.PlatformUsersPage })));
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 
 function RouteLoader() {
@@ -38,14 +38,6 @@ function RouteLoader() {
       <div className="h-4 w-72 bg-surface-raised rounded animate-pulse" />
     </div>
   );
-}
-
-// El dueño de la plataforma (isPlatformAdmin) entra directo al panel de
-// Plataforma en vez del dashboard operativo de un ISP, que para esa cuenta
-// interna no tiene sentido mostrar.
-function HomeRedirect() {
-  const isPlatformAdmin = useAuthStore((s) => s.user?.isPlatformAdmin);
-  return <Navigate to={isPlatformAdmin ? '/platform' : '/dashboard'} replace />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -65,7 +57,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   </RequireAuth>
                 }
               >
-                <Route index element={<HomeRedirect />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="clientes" element={<CustomersListPage />} />
                 <Route path="clientes/nuevo" element={<NewCustomerPage />} />
@@ -80,9 +72,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="monitoreo" element={<MonitoringPage />} />
                 <Route path="mapa" element={<NapMapPage />} />
                 <Route path="settings" element={<SettingsPage />} />
-                <Route path="usuarios" element={<UsersPage />} />
                 <Route path="suscripcion" element={<SubscriptionPage />} />
+                <Route path="usuarios" element={<UsersPage />} />
                 <Route path="platform" element={<PlatformAdminPage />} />
+                <Route path="platform/usuarios" element={<PlatformUsersPage />} />
                 <Route path="platform/facturacion" element={<PlatformBillingPage />} />
               </Route>
             </Routes>

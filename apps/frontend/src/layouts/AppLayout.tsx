@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Wifi, FileText, Router, Radio, Boxes,
   Map as MapIcon, Activity, Ticket, Archive, BarChart3, Settings, LogOut,
-  ChevronLeft, ChevronRight, Search, Bell, Building2, X, Menu, CreditCard,
+  ChevronLeft, ChevronRight, Search, Bell, Building2, X, Menu, CreditCard, UserCog,
 } from 'lucide-react';
 import { Logomark } from '../components/Logomark';
 import { useAuthStore } from '../store/auth.store';
@@ -17,6 +17,8 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   live: boolean;
   badgeKey?: string;
+  /** Si se define, el ítem solo se muestra a quien tenga ese permiso. */
+  permission?: string;
 }
 
 interface NavGroup {
@@ -66,7 +68,7 @@ const NAV: NavGroup[] = [
     label: 'Gestión',
     items: [
       { to: '/inventario', label: 'Inventario', icon: Archive, live: true },
-      { to: '/usuarios', label: 'Usuarios', icon: Users, live: true },
+      { to: '/usuarios', label: 'Usuarios', icon: UserCog, live: true, permission: 'users.manage' },
       { to: '/reportes', label: 'Reportes', icon: BarChart3, live: false },
       { to: '/auditoria', label: 'Auditoría', icon: Building2, live: false },
     ],
@@ -76,6 +78,19 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/suscripcion', label: 'Mi suscripción', icon: CreditCard, live: true },
       { to: '/settings', label: 'Configuración', icon: Settings, live: true },
+    ],
+  },
+];
+
+// Menú del DUEÑO de la plataforma: solo ve lo suyo (cuentas, usuarios, cobros).
+// No opera datos de ningún ISP, así que no muestra clientes/planes/red.
+const PLATFORM_NAV: NavGroup[] = [
+  {
+    label: 'Plataforma',
+    items: [
+      { to: '/platform', label: 'Cuentas de ISP', icon: Building2, live: true },
+      { to: '/platform/usuarios', label: 'Usuarios (todas)', icon: Users, live: true },
+      { to: '/platform/facturacion', label: 'Cobros y suscripciones', icon: CreditCard, live: true },
     ],
   },
 ];
@@ -92,12 +107,29 @@ export function AppLayout() {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isPlatformAdmin = !!user?.isPlatformAdmin;
+  const onPlatformRoute = location.pathname.startsWith('/platform');
 
   const [summary, setSummary] = useState<Summary | null>(null);
   useEffect(() => {
+    if (isPlatformAdmin) return; // el dueño no tiene datos de ISP que resumir
     api.get('/dashboard/summary').then((res) => setSummary(res.data)).catch(() => {});
-  }, []);
+  }, [isPlatformAdmin]);
+
+  // El dueño de la plataforma solo trabaja en /platform/*; un usuario de ISP nunca entra ahí.
+  // (Sin esto, el dueño caía en pantallas de ISP y recibía "no tienes permisos".)
+  if (isPlatformAdmin && !onPlatformRoute) return <Navigate to="/platform" replace />;
+  if (!isPlatformAdmin && onPlatformRoute) return <Navigate to="/dashboard" replace />;
+
+  const permissions = user?.permissions ?? [];
+  const navGroups = isPlatformAdmin
+    ? PLATFORM_NAV
+    : NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.permission || permissions.includes(i.permission)) })).filter(
+        (g) => g.items.length > 0,
+      );
 
   function badgeFor(key?: string): number {
     if (!key || !summary?.[key]?.value) return 0;
@@ -126,7 +158,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-3 overflow-y-auto overflow-x-hidden">
-          {!user?.isPlatformAdmin && NAV.map((group, gi) => (
+          {navGroups.map((group, gi) => (
             <div key={gi}>
               {group.label && (
                 <p className={`px-3 pb-1 text-[10px] font-medium text-muted/70 uppercase tracking-wider ${collapsed ? 'md:hidden' : ''}`}>
@@ -141,49 +173,6 @@ export function AppLayout() {
             </div>
           ))}
 
-          {user?.isPlatformAdmin && (
-            <div className="border-t border-border pt-3 space-y-0.5">
-              <NavLink
-                to="/platform"
-                onClick={() => setMobileOpen(false)}
-                title={collapsed ? 'Plataforma (todas las cuentas)' : undefined}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
-                  } ${collapsed ? 'md:justify-center' : ''}`
-                }
-              >
-                <Building2 size={16} strokeWidth={2} className="shrink-0" />
-                <span className={collapsed ? 'md:hidden' : ''}>Plataforma (todas las cuentas)</span>
-              </NavLink>
-              <NavLink
-                to="/platform/facturacion"
-                onClick={() => setMobileOpen(false)}
-                title={collapsed ? 'Cobros de la plataforma' : undefined}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
-                  } ${collapsed ? 'md:justify-center' : ''}`
-                }
-              >
-                <FileText size={16} strokeWidth={2} className="shrink-0" />
-                <span className={collapsed ? 'md:hidden' : ''}>Cobros de la plataforma</span>
-              </NavLink>
-              <NavLink
-                to="/settings"
-                onClick={() => setMobileOpen(false)}
-                title={collapsed ? 'Configuración' : undefined}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
-                  } ${collapsed ? 'md:justify-center' : ''}`
-                }
-              >
-                <Settings size={16} strokeWidth={2} className="shrink-0" />
-                <span className={collapsed ? 'md:hidden' : ''}>Configuración</span>
-              </NavLink>
-            </div>
-          )}
         </nav>
 
         <button
@@ -218,6 +207,7 @@ export function AppLayout() {
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar
           user={user}
+          isPlatformAdmin={isPlatformAdmin}
           alertCount={alertCount}
           summary={summary}
           onNavigate={navigate}
@@ -273,6 +263,7 @@ function SidebarLink({
 
 function Topbar({
   user,
+  isPlatformAdmin,
   alertCount,
   summary,
   onNavigate,
@@ -280,6 +271,7 @@ function Topbar({
   onOpenMobileNav,
 }: {
   user: ReturnType<typeof useAuthStore.getState>['user'];
+  isPlatformAdmin: boolean;
   alertCount: number;
   summary: Summary | null;
   onNavigate: (path: string) => void;
@@ -327,6 +319,7 @@ function Topbar({
       <button onClick={onOpenMobileNav} className="text-muted hover:text-ink md:hidden shrink-0" aria-label="Abrir menú">
         <Menu size={20} />
       </button>
+      {!isPlatformAdmin && (
       <div ref={searchRef} className="relative flex-1 max-w-md">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
         <input
@@ -369,6 +362,9 @@ function Topbar({
         )}
       </div>
 
+      )}
+
+      {!isPlatformAdmin && (
       <div className="hidden md:flex items-center gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5">
           <span className={`h-1.5 w-1.5 rounded-full ${mikrotikOnline ? 'bg-ok' : 'bg-border'}`} />
@@ -379,8 +375,10 @@ function Topbar({
           OLT {oltOnline ?? '—'}
         </span>
       </div>
+      )}
 
       <div className="flex items-center gap-2 ml-auto">
+        {!isPlatformAdmin && (
         <div ref={notifRef} className="relative">
           <button
             onClick={() => setNotifOpen((v) => !v)}
@@ -422,6 +420,7 @@ function Topbar({
             </div>
           )}
         </div>
+        )}
 
         <div ref={profileRef} className="relative">
           <button

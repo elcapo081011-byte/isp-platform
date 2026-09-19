@@ -20,8 +20,6 @@ export interface Router {
   name: string;
   host: string;
   port: number;
-  username: string;
-  useTls: boolean;
   location: string | null;
   status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
   lastCheckedAt: string | null;

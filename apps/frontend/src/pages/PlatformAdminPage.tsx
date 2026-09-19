@@ -1,88 +1,99 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { api } from '../lib/api';
+import { useToast } from '../components/Toast';
+import { Modal } from '../components/Modal';
+
+interface OrgRow {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  isActive: boolean;
+  isInternal: boolean;
+  trialEndsAt: string | null;
+  createdAt: string;
+  customersCount: number;
+  usersCount: number;
+  routersCount: number;
+  oltsCount: number;
+  owner: { email: string; firstName: string; lastName: string } | null;
+}
+
+const emptyForm = { organizationName: '', slug: '', firstName: '', lastName: '', email: '', password: '' };
+const inputClass =
+  'w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal transition-colors';
 
 export function PlatformAdminPage() {
-  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgs, setOrgs] = useState<OrgRow[]>([]);
   const [summary, setSummary] = useState<any>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editPlan, setEditPlan] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   async function load() {
-    const [orgsRes, summaryRes] = await Promise.all([
-      api.get('/platform/organizations'),
-      api.get('/platform/summary'),
-    ]);
-    setOrgs(orgsRes.data);
+    const [orgsRes, summaryRes] = await Promise.all([api.get('/platform/organizations'), api.get('/platform/summary')]);
+    setOrgs(orgsRes.data.filter((o: OrgRow) => !o.isInternal));
     setSummary(summaryRes.data);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load().catch((err) => toast.error(err?.response?.data?.message ?? 'No se pudo cargar el panel.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function toggle(id: string, isActive: boolean) {
-    await api.post(`/platform/organizations/${id}/${isActive ? 'suspend' : 'activate'}`);
-    await load();
-  }
-
-  function startEdit(o: any) {
-    setError(null);
-    setEditingId(o.id);
-    setEditName(o.name);
-    setEditPlan(o.plan);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setError(null);
-  }
-
-  async function saveEdit(id: string) {
-    setError(null);
     try {
-      await api.patch(`/platform/organizations/${id}`, { name: editName, plan: editPlan });
-      setEditingId(null);
+      await api.post(`/platform/organizations/${id}/${isActive ? 'suspend' : 'activate'}`);
       await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'No se pudo guardar el cambio.');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'No se pudo cambiar el estado de la cuenta.');
     }
   }
 
-  async function remove(o: any) {
-    const confirmed = window.confirm(
-      `¿Eliminar "${o.name}" (${o.slug}) permanentemente?\n\nEsto borra TODOS sus clientes, usuarios, facturas, routers y OLT. No se puede deshacer.`,
-    );
-    if (!confirmed) return;
-    setError(null);
+  async function createOrg(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
     try {
-      await api.delete(`/platform/organizations/${o.id}`);
+      await api.post('/platform/organizations', form);
+      toast.success(`Cuenta "${form.organizationName}" creada. Su dueño ya puede entrar con ${form.email}.`);
+      setModalOpen(false);
+      setForm(emptyForm);
       await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'No se pudo eliminar la organización.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg.join(' · ') : msg ?? 'No se pudo crear la cuenta.');
+    } finally {
+      setSaving(false);
     }
+  }
+
+  function field(key: keyof typeof emptyForm) {
+    return { value: form[key], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value })) };
   }
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-display font-bold">Plataforma — todas las cuentas</h1>
-        <Link to="/platform/facturacion" className="text-sm text-signal hover:underline">Ver cobros de la plataforma →</Link>
+    <div className="p-8 max-w-6xl">
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <h1 className="text-2xl font-display font-bold">Cuentas de ISP</h1>
+        <button
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2 bg-signal text-base text-sm font-medium rounded-md px-4 py-2 hover:opacity-90 transition-opacity shrink-0"
+        >
+          <Plus size={16} /> Nueva cuenta
+        </button>
       </div>
       <p className="text-muted text-sm mb-6">
-        Solo tú ves esta página. Cada fila es un ISP con su propia cuenta aislada.
+        Solo tú ves esta página. Cada fila es un ISP con su propia cuenta aislada.{' '}
+        <Link to="/platform/facturacion" className="text-signal hover:underline">Ver cobros y suscripciones →</Link>
       </p>
 
-      {error && (
-        <div className="status-panel status-panel--critical mb-4 text-sm">
-          {error}
-        </div>
-      )}
-
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="status-panel status-panel--neutral">
-            <p className="text-xs text-muted mb-1">Organizaciones</p>
+            <p className="text-xs text-muted mb-1">Cuentas de ISP</p>
             <p className="text-2xl font-display font-bold">{summary.totalOrganizations}</p>
           </div>
           <div className="status-panel status-panel--ok">
@@ -100,47 +111,42 @@ export function PlatformAdminPage() {
         </div>
       )}
 
-      <div className="border border-border rounded-md overflow-hidden">
+      <div className="border border-border rounded-md overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-surface text-muted text-xs">
             <tr>
               <th className="text-left px-4 py-3">Organización</th>
+              <th className="text-left px-4 py-3">Dueño</th>
               <th className="text-left px-4 py-3">Plan</th>
               <th className="text-left px-4 py-3">Clientes</th>
               <th className="text-left px-4 py-3">Usuarios</th>
               <th className="text-left px-4 py-3">Routers/OLT</th>
               <th className="text-left px-4 py-3">Estado</th>
-              <th className="text-left px-4 py-3"></th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
+            {orgs.length === 0 && (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-muted">Aún no hay cuentas de ISP registradas.</td></tr>
+            )}
             {orgs.map((o) => (
               <tr key={o.id} className="border-t border-border">
                 <td className="px-4 py-3">
-                  {editingId === o.id ? (
-                    <input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="bg-surface border border-border rounded px-2 py-1 text-sm w-full"
-                    />
-                  ) : (
-                    <p className="font-medium">{o.name}</p>
-                  )}
+                  <p className="font-medium">{o.name}</p>
                   <p className="text-xs text-muted">{o.slug}</p>
                 </td>
                 <td className="px-4 py-3 text-muted">
-                  {editingId === o.id ? (
-                    <select
-                      value={editPlan}
-                      onChange={(e) => setEditPlan(e.target.value)}
-                      className="bg-surface border border-border rounded px-2 py-1 text-sm"
-                    >
-                      <option value="TRIAL">TRIAL</option>
-                      <option value="BASIC">BASIC</option>
-                      <option value="PRO">PRO</option>
-                    </select>
-                  ) : (
-                    o.plan
+                  {o.owner ? (
+                    <>
+                      <p className="text-ink">{o.owner.firstName} {o.owner.lastName}</p>
+                      <p className="text-xs">{o.owner.email}</p>
+                    </>
+                  ) : '—'}
+                </td>
+                <td className="px-4 py-3 text-muted">
+                  {o.plan}
+                  {o.plan === 'TRIAL' && o.trialEndsAt && (
+                    <p className="text-xs">hasta {new Date(o.trialEndsAt).toLocaleDateString('es')}</p>
                   )}
                 </td>
                 <td className="px-4 py-3">{o.customersCount}</td>
@@ -149,44 +155,59 @@ export function PlatformAdminPage() {
                 <td className="px-4 py-3">
                   <span className={o.isActive ? 'text-ok' : 'text-critical'}>{o.isActive ? 'Activa' : 'Suspendida'}</span>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  {editingId === o.id ? (
-                    <>
-                      <button onClick={() => saveEdit(o.id)} className="text-xs text-ok hover:underline mr-3">
-                        Guardar
-                      </button>
-                      <button onClick={cancelEdit} className="text-xs text-muted hover:underline">
-                        Cancelar
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {o.slug !== 'platform' && (
-                        <button onClick={() => toggle(o.id, o.isActive)} className="text-xs text-signal hover:underline mr-3">
-                          {o.isActive ? 'Suspender' : 'Reactivar'}
-                        </button>
-                      )}
-                      {o.slug !== 'platform' && (
-                        <button onClick={() => startEdit(o)} className="text-xs text-signal hover:underline mr-3">
-                          Editar
-                        </button>
-                      )}
-                      {o.slug !== 'platform' && (
-                        <button onClick={() => remove(o)} className="text-xs text-critical hover:underline">
-                          Eliminar
-                        </button>
-                      )}
-                      {o.slug === 'platform' && (
-                        <span className="text-xs text-muted">Tu organización interna</span>
-                      )}
-                    </>
-                  )}
+                <td className="px-4 py-3">
+                  <button onClick={() => toggle(o.id, o.isActive)} className="text-xs text-signal hover:underline">
+                    {o.isActive ? 'Suspender' : 'Reactivar'}
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {modalOpen && (
+        <Modal
+          title="Nueva cuenta de ISP"
+          subtitle="Crea la organización y a su dueño (rol Super administrador). Él entra con este correo y contraseña."
+          onClose={() => setModalOpen(false)}
+        >
+          <form onSubmit={createOrg} className="space-y-4">
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Nombre de la empresa</label>
+              <input required minLength={2} className={inputClass} {...field('organizationName')} />
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Identificador único</label>
+              <input required minLength={2} placeholder="ej. fibraveloz" className={inputClass} {...field('slug')} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-muted mb-1.5">Nombre del dueño</label>
+                <input required minLength={2} className={inputClass} {...field('firstName')} />
+              </div>
+              <div>
+                <label className="block text-sm text-muted mb-1.5">Apellido</label>
+                <input required minLength={2} className={inputClass} {...field('lastName')} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Correo del dueño</label>
+              <input required type="email" className={inputClass} {...field('email')} />
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Contraseña inicial</label>
+              <input required type="password" minLength={8} autoComplete="new-password" className={inputClass} {...field('password')} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setModalOpen(false)} className="text-sm text-muted hover:text-ink px-4 py-2">Cancelar</button>
+              <button type="submit" disabled={saving} className="bg-signal text-base text-sm font-medium rounded-md px-5 py-2 disabled:opacity-50">
+                {saving ? 'Creando…' : 'Crear cuenta'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -15,13 +15,8 @@ interface PlatformInvoice {
   dueDate: string;
   paidAt: string | null;
   paidMethod: string | null;
-}
-
-interface UpgradeRequest {
-  id: string;
-  organization: { name: string; slug: string };
-  after: { tier: string; monthlyPrice: number } | null;
-  createdAt: string;
+  paymentReportedAt: string | null;
+  paymentReference: string | null;
 }
 
 const FILTERS = [
@@ -40,20 +35,37 @@ const STATUS_CLASS: Record<PlatformInvoice['status'], string> = {
 
 export function PlatformBillingPage() {
   const [invoices, setInvoices] = useState<PlatformInvoice[]>([]);
-  const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([]);
   const [filter, setFilter] = useState('OVERDUE');
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [instructions, setInstructions] = useState('');
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const toast = useToast();
+
+  useEffect(() => {
+    api
+      .get('/platform/billing/payment-info')
+      .then((res) => setInstructions(res.data.instructions ?? ''))
+      .catch(() => {});
+  }, []);
+
+  async function saveInstructions() {
+    setSavingInstructions(true);
+    try {
+      await api.put('/platform/billing/payment-info', { text: instructions });
+      toast.success('Instrucciones de pago guardadas. Los ISP ya las ven en “Mi suscripción”.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg.join(' · ') : msg ?? 'No se pudieron guardar las instrucciones.');
+    } finally {
+      setSavingInstructions(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
-    const [invoicesRes, upgradeRes] = await Promise.all([
-      api.get('/platform/billing/invoices', { params: filter ? { status: filter } : {} }),
-      api.get('/platform/billing/upgrade-requests'),
-    ]);
-    setInvoices(invoicesRes.data);
-    setUpgradeRequests(upgradeRes.data);
+    const res = await api.get('/platform/billing/invoices', { params: filter ? { status: filter } : {} });
+    setInvoices(res.data);
     setLoading(false);
   }
 
@@ -82,22 +94,29 @@ export function PlatformBillingPage() {
         marca aquí una factura como pagada apenas confirmes el pago por fuera (transferencia, efectivo, etc.).
       </p>
 
-      {upgradeRequests.length > 0 && (
-        <div className="border border-signal/40 bg-surface-raised rounded-md p-4 mb-6">
-          <p className="text-sm font-medium mb-2">ISP que pidieron subir de plan</p>
-          <div className="space-y-1.5">
-            {upgradeRequests.map((r) => (
-              <div key={r.id} className="flex items-center justify-between text-sm">
-                <span>
-                  <strong>{r.organization.name}</strong> quiere el plan {r.after?.tier ?? '—'}
-                  {r.after?.monthlyPrice ? ` (${r.after.monthlyPrice}/mes)` : ''}
-                </span>
-                <span className="text-xs text-muted">{new Date(r.createdAt).toLocaleString('es')}</span>
-              </div>
-            ))}
-          </div>
+      <div className="border border-border rounded-md p-4 mb-6">
+        <p className="text-sm font-medium mb-1">Cómo te pagan los ISP</p>
+        <p className="text-xs text-muted mb-2">
+          Este texto lo ve cada ISP en su pantalla “Mi suscripción” (cuenta bancaria, enlace de pago, WhatsApp, etc.).
+        </p>
+        <textarea
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          rows={4}
+          maxLength={4000}
+          placeholder={'Ej.\nBanco X · Cuenta 000-000000-0 · A nombre de Mi Empresa\nEnvía el comprobante por WhatsApp al +1 809 000 0000'}
+          className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal transition-colors"
+        />
+        <div className="flex justify-end mt-2">
+          <button
+            onClick={saveInstructions}
+            disabled={savingInstructions}
+            className="bg-signal text-base text-sm font-medium rounded-md px-4 py-1.5 disabled:opacity-50"
+          >
+            {savingInstructions ? 'Guardando…' : 'Guardar'}
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="flex gap-2 mb-4">
         {FILTERS.map((f) => (
@@ -130,7 +149,7 @@ export function PlatformBillingPage() {
           <tbody>
             {!loading && invoices.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted">Sin facturas para este filtro.</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-muted">Sin facturas para este filtro.</td>
               </tr>
             )}
             {invoices.map((inv) => (
@@ -146,6 +165,11 @@ export function PlatformBillingPage() {
                 <td className="px-4 py-3 text-muted">{new Date(inv.dueDate).toLocaleDateString('es')}</td>
                 <td className={`px-4 py-3 font-medium ${STATUS_CLASS[inv.status]}`}>
                   {inv.status === 'PAID' ? `Pagada (${inv.paidMethod ?? ''})` : inv.status}
+                  {inv.status !== 'PAID' && inv.paymentReportedAt && (
+                    <p className="text-xs font-normal text-signal mt-0.5">
+                      El ISP avisó su pago: “{inv.paymentReference}”
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && (

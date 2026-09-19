@@ -22,7 +22,7 @@ export function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       setSession(data, remember);
-      navigate(data.user?.isPlatformAdmin ? '/platform' : '/dashboard');
+      navigate('/dashboard');
     } catch {
       setError('No pudimos verificar esas credenciales. Revisa el correo y la contraseña.');
     } finally {
