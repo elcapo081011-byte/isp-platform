@@ -26,35 +26,3 @@ export class CreateRouterDto {
   @IsString()
   location?: string;
 }
-
-export class UpdateRouterDto {
-  @IsOptional()
-  @IsString()
-  @MinLength(2)
-  name?: string;
-
-  @IsOptional()
-  @IsString()
-  host?: string;
-
-  @IsOptional()
-  @IsInt()
-  port?: number;
-
-  @IsOptional()
-  @IsString()
-  username?: string;
-
-  // Si no se envía, se deja la contraseña actual (no se vuelve a pedir cada vez que se edita).
-  @IsOptional()
-  @IsString()
-  password?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  useTls?: boolean;
-
-  @IsOptional()
-  @IsString()
-  location?: string;
-}

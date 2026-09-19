@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Module, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Module, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../platform/platform-admin.guard';
+import { PermissionsGuard, RequirePermissions } from '../rbac/permissions.guard';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -19,10 +20,25 @@ class MarkPaidDto {
   notes?: string;
 }
 
-class UpgradeRequestDto {
-  @ApiProperty({ example: 'BASIC', description: 'Nombre del plan que el ISP quiere comprar.' })
+class ReportPaymentDto {
+  @ApiProperty({ example: 'Transferencia #48213 del 03/10', description: 'Referencia/comprobante del pago para que el dueño de la plataforma lo verifique.' })
   @IsString()
-  tier!: string;
+  @MinLength(3)
+  @MaxLength(200)
+  reference!: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+class PaymentInstructionsDto {
+  @ApiProperty({ description: 'Texto libre: cuenta bancaria, enlace de pago, WhatsApp de contacto, etc.' })
+  @IsString()
+  @MaxLength(4000)
+  text!: string;
 }
 
 /**
@@ -43,19 +59,27 @@ export class SubscriptionController {
     return this.platformBilling.getUsage(req.user.organizationId);
   }
 
+  @Get('plans')
+  getPlans(@Req() req: any) {
+    return this.platformBilling.getPlans(req.user.organizationId);
+  }
+
+  @Get('payment-info')
+  async getPaymentInfo() {
+    return { instructions: await this.platformBilling.getPaymentInstructions() };
+  }
+
   @Get('invoices')
   listInvoices(@Req() req: any) {
     return this.platformBilling.listInvoicesForOrg(req.user.organizationId);
   }
 
-  @Get('tiers')
-  listTiers() {
-    return this.platformBilling.listTiers();
-  }
-
-  @Post('upgrade-request')
-  requestUpgrade(@Body() dto: UpgradeRequestDto, @Req() req: any) {
-    return this.platformBilling.requestUpgrade(req.user.organizationId, req.user.sub, dto.tier);
+  // Avisar un pago es cosa del dueño de la cuenta (SUPER_ADMIN), no de cualquier empleado.
+  @Post('invoices/:id/report-payment')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('settings.manage')
+  reportPayment(@Param('id') id: string, @Body() dto: ReportPaymentDto, @Req() req: any) {
+    return this.platformBilling.reportPayment(req.user.organizationId, req.user.sub, id, dto.reference, dto.notes);
   }
 }
 
@@ -71,14 +95,19 @@ export class SubscriptionController {
 export class PlatformBillingController {
   constructor(private platformBilling: PlatformBillingService) {}
 
+  @Get('payment-info')
+  async getPaymentInfo() {
+    return { instructions: await this.platformBilling.getPaymentInstructions() };
+  }
+
+  @Put('payment-info')
+  setPaymentInfo(@Body() dto: PaymentInstructionsDto, @Req() req: any) {
+    return this.platformBilling.setPaymentInstructions(dto.text, req.user.sub);
+  }
+
   @Get('invoices')
   listAll(@Query('status') status?: string) {
     return this.platformBilling.listAllInvoices(status);
-  }
-
-  @Get('upgrade-requests')
-  listUpgradeRequests() {
-    return this.platformBilling.listUpgradeRequests();
   }
 
   @Get('organizations/:id/invoices')

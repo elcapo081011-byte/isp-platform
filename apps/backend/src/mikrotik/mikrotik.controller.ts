@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../rbac/permissions.guard';
 import { MikrotikService } from './mikrotik.service';
-import { CreateRouterDto, UpdateRouterDto } from './dto/router.dto';
+import { CreateRouterDto } from './dto/router.dto';
 
 @ApiTags('mikrotik')
 @ApiBearerAuth()
@@ -22,18 +22,6 @@ export class MikrotikController {
   @RequirePermissions('mikrotik.manage')
   create(@Body() dto: CreateRouterDto, @Req() req: any) {
     return this.mikrotik.create(req.user.organizationId, dto, req.user.sub, req.ip);
-  }
-
-  @Patch(':id')
-  @RequirePermissions('mikrotik.manage')
-  update(@Param('id') id: string, @Body() dto: UpdateRouterDto, @Req() req: any) {
-    return this.mikrotik.update(req.user.organizationId, id, dto, req.user.sub, req.ip);
-  }
-
-  @Delete(':id')
-  @RequirePermissions('mikrotik.manage')
-  remove(@Param('id') id: string, @Req() req: any) {
-    return this.mikrotik.remove(req.user.organizationId, id, req.user.sub, req.ip);
   }
 
   @Post(':id/check-connection')

@@ -70,7 +70,6 @@ export class NotificationsService {
       case 'platform_invoice.overdue':
       case 'platform.suspended_nonpayment':
       case 'platform.reactivated':
-      case 'platform.upgrade_requested':
         return `Hola ${name}, ${params.payload.message}`;
       default:
         return `Evento: ${params.event}`;

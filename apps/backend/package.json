@@ -7,6 +7,7 @@
     "start": "node dist/main.js",
     "dev": "nest start --watch",
     "migration:deploy": "prisma migrate deploy --schema=../../packages/database/prisma/schema.prisma",
+    "db:push": "prisma db push --skip-generate --schema=../../packages/database/prisma/schema.prisma",
     "migration:dev": "prisma migrate dev --schema=../../packages/database/prisma/schema.prisma",
     "seed": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\"}' ts-node ../../packages/database/prisma/seed.ts",
     "test": "jest"

@@ -23,6 +23,16 @@ export const PLATFORM_TIERS: PlatformTier[] = [
   { name: 'ENTERPRISE', maxClients: Infinity, monthlyPrice: 80 },
 ];
 
+const TIER_LABELS: Record<string, string> = {
+  FREE: 'Gratis',
+  BASIC: 'Básico',
+  PRO: 'Pro',
+  ENTERPRISE: 'Ilimitado',
+};
+
+const PLATFORM_ORG_SLUG = 'platform';
+export const PAYMENT_INSTRUCTIONS_KEY = 'platform_payment_instructions';
+
 export function tierForClientCount(clientCount: number): PlatformTier {
   return PLATFORM_TIERS.find((t) => clientCount <= t.maxClients) ?? PLATFORM_TIERS[PLATFORM_TIERS.length - 1];
 }
@@ -92,57 +102,79 @@ export class PlatformBillingService {
     };
   }
 
-  // Toda la tabla de precios, para mostrarla completa en "Mi suscripción"
-  // (hoy solo se veía el plan actual y el siguiente, no todos los planes).
-  listTiers() {
-    return PLATFORM_TIERS.map((t) => ({
-      name: t.name,
-      maxClients: Number.isFinite(t.maxClients) ? t.maxClients : null,
-      monthlyPrice: t.monthlyPrice,
-    }));
+  /** Catálogo de planes que ve el ISP en "Mi suscripción" para saber qué le toca y qué cuesta cada escalón. */
+  async getPlans(organizationId: string) {
+    const usage = await this.getUsage(organizationId);
+    let previousMax = 0;
+    const plans = PLATFORM_TIERS.map((t) => {
+      const minClients = previousMax + 1;
+      previousMax = Number.isFinite(t.maxClients) ? t.maxClients : previousMax;
+      return {
+        name: t.name,
+        label: TIER_LABELS[t.name] ?? t.name,
+        minClients: t.name === 'FREE' ? 0 : minClients,
+        maxClients: Number.isFinite(t.maxClients) ? t.maxClients : null,
+        monthlyPrice: t.monthlyPrice,
+        isCurrent: t.name === usage.tier,
+      };
+    });
+    return { currency: usage.currency, clientCount: usage.clientCount, currentTier: usage.tier, plans };
   }
 
-  // El dueño del ISP no puede pagar solo (no hay gateway conectado), pero sí
-  // puede avisar que quiere comprar/subir de plan. Esto queda registrado en
-  // auditoría (visible para ti en el panel de plataforma) y te llega un
-  // correo si tu cuenta de plataforma tiene email real.
-  async requestUpgrade(organizationId: string, userId: string, tierName: string) {
-    const tier = PLATFORM_TIERS.find((t) => t.name === tierName);
-    if (!tier) throw new BadRequestException('Ese plan no existe.');
+  // -- Instrucciones de pago (las define el dueño de la plataforma) --------
+  // Se guardan como un Setting de la organización interna "platform".
 
-    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
-    if (!org) throw new NotFoundException('Organización no encontrada');
+  async getPaymentInstructions(): Promise<string | null> {
+    const org = await this.prisma.organization.findUnique({ where: { slug: PLATFORM_ORG_SLUG } });
+    if (!org) return null;
+    const row = await this.prisma.setting.findUnique({
+      where: { organizationId_key: { organizationId: org.id, key: PAYMENT_INSTRUCTIONS_KEY } },
+    });
+    const value = row?.value as { text?: string } | null | undefined;
+    return value?.text?.trim() ? value.text : null;
+  }
 
+  async setPaymentInstructions(text: string, platformAdminUserId: string) {
+    const org = await this.prisma.organization.upsert({
+      where: { slug: PLATFORM_ORG_SLUG },
+      update: {},
+      create: { name: 'Plataforma (interno)', slug: PLATFORM_ORG_SLUG, plan: 'INTERNAL' },
+    });
+    await this.prisma.setting.upsert({
+      where: { organizationId_key: { organizationId: org.id, key: PAYMENT_INSTRUCTIONS_KEY } },
+      update: { value: { text } },
+      create: { organizationId: org.id, key: PAYMENT_INSTRUCTIONS_KEY, value: { text } },
+    });
+    await this.audit.log({
+      organizationId: org.id,
+      userId: platformAdminUserId,
+      action: 'platform.payment_instructions_update',
+      entityType: 'Setting',
+      entityId: PAYMENT_INSTRUCTIONS_KEY,
+    });
+    return { text };
+  }
+
+  /** El ISP avisa que ya pagó una factura de la plataforma; el dueño la verifica y la marca pagada. */
+  async reportPayment(organizationId: string, userId: string, invoiceId: string, reference: string, notes?: string) {
+    const invoice = await this.prisma.platformInvoice.findFirst({ where: { id: invoiceId, organizationId } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+    if (invoice.status === 'PAID' || invoice.status === 'CANCELLED') {
+      throw new BadRequestException('Esa factura ya no admite reportar un pago.');
+    }
+    const updated = await this.prisma.platformInvoice.update({
+      where: { id: invoiceId },
+      data: { paymentReportedAt: new Date(), paymentReference: reference, notes: notes ?? invoice.notes },
+    });
     await this.audit.log({
       organizationId,
       userId,
-      action: 'platform.upgrade_requested',
-      entityType: 'Organization',
-      entityId: organizationId,
-      after: { tier: tier.name, monthlyPrice: tier.monthlyPrice },
+      action: 'platform.invoice_payment_reported',
+      entityType: 'PlatformInvoice',
+      entityId: invoiceId,
+      after: { reference },
     });
-
-    const platformAdmin = await this.prisma.user.findFirst({ where: { isPlatformAdmin: true }, orderBy: { createdAt: 'asc' } });
-    if (platformAdmin) {
-      await this.notifications.notify({
-        organizationId,
-        event: 'platform.upgrade_requested',
-        customer: { email: platformAdmin.email, firstName: platformAdmin.firstName, lastName: platformAdmin.lastName },
-        payload: { message: `${org.name} quiere pasarse al plan ${tier.name} (${org.platformCurrency} ${tier.monthlyPrice}/mes). Contáctalos para coordinar el pago.` },
-      });
-    }
-
-    return { requested: true, tier: tier.name };
-  }
-
-  // Panel del dueño de la plataforma: qué ISP han pedido subir de plan.
-  async listUpgradeRequests() {
-    return this.prisma.auditLog.findMany({
-      where: { action: 'platform.upgrade_requested' },
-      include: { organization: { select: { name: true, slug: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    return updated;
   }
 
   async listInvoicesForOrg(organizationId: string) {

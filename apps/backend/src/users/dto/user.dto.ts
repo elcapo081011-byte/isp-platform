@@ -1,31 +1,48 @@
-import { IsArray, IsBoolean, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateUserDto {
-  @IsString()
-  @MinLength(2)
-  firstName!: string;
-
-  @IsString()
-  @MinLength(2)
-  lastName!: string;
-
   @IsEmail()
-  email!: string;
+  email: string;
+
+  @IsString()
+  @MinLength(2)
+  firstName: string;
+
+  @IsString()
+  @MinLength(2)
+  lastName: string;
 
   @IsString()
   @MinLength(8)
-  password!: string;
+  password: string;
 
-  @IsArray()
-  roleIds!: string[];
+  /** Nombre del rol: ADMIN, SOPORTE, TECNICO, FACTURACION, MONITORING (o SUPER_ADMIN si quien crea también lo es). */
+  @IsString()
+  role: string;
 }
 
-export class UpdateUserRolesDto {
-  @IsArray()
-  roleIds!: string[];
-}
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  firstName?: string;
 
-export class SetUserActiveDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
   @IsBoolean()
-  isActive!: boolean;
+  isActive?: boolean;
+
+  /** Si viene, reemplaza la contraseña y cierra las sesiones abiertas de ese usuario. */
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  password?: string;
 }

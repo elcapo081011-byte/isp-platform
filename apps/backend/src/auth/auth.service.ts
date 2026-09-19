@@ -4,36 +4,13 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { RegisterOrganizationDto } from './dto/register-organization.dto';
+import { ensureDefaultRoles } from '../rbac/default-roles';
+
+// Identificadores que un ISP no puede reclamar en el registro público.
+export const RESERVED_SLUGS = ['platform', 'admin', 'api', 'www', 'app', 'root', 'system'];
 
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL = '7d';
-
-// Catálogo mínimo replicado del seed para poder crear roles al vuelo cuando
-// se registra una organización nueva (no depende de que el seed haya corrido).
-const DEFAULT_PERMISSIONS: { key: string; module: string; description: string }[] = [
-  { key: 'clients.view', module: 'clients', description: 'Ver clientes' },
-  { key: 'clients.create', module: 'clients', description: 'Crear clientes' },
-  { key: 'clients.edit', module: 'clients', description: 'Editar clientes' },
-  { key: 'clients.delete', module: 'clients', description: 'Eliminar clientes' },
-  { key: 'plans.view', module: 'plans', description: 'Ver planes' },
-  { key: 'plans.manage', module: 'plans', description: 'Administrar planes' },
-  { key: 'billing.view', module: 'billing', description: 'Ver facturación' },
-  { key: 'billing.create', module: 'billing', description: 'Crear facturas' },
-  { key: 'billing.edit', module: 'billing', description: 'Editar facturación' },
-  { key: 'mikrotik.view', module: 'mikrotik', description: 'Ver MikroTik' },
-  { key: 'mikrotik.manage', module: 'mikrotik', description: 'Administrar MikroTik' },
-  { key: 'olt.view', module: 'olt', description: 'Ver OLT' },
-  { key: 'olt.manage', module: 'olt', description: 'Administrar OLT' },
-  { key: 'onu.view', module: 'onu', description: 'Ver ONU/ONT' },
-  { key: 'onu.manage', module: 'onu', description: 'Administrar ONU/ONT' },
-  { key: 'inventory.view', module: 'inventory', description: 'Ver inventario' },
-  { key: 'inventory.manage', module: 'inventory', description: 'Administrar inventario' },
-  { key: 'tickets.view', module: 'tickets', description: 'Ver tickets' },
-  { key: 'tickets.manage', module: 'tickets', description: 'Administrar tickets' },
-  { key: 'users.manage', module: 'users', description: 'Administrar usuarios y roles' },
-  { key: 'settings.manage', module: 'settings', description: 'Administrar configuración' },
-  { key: 'audit.view', module: 'audit', description: 'Ver auditoría' },
-];
 
 @Injectable()
 export class AuthService {
@@ -44,63 +21,57 @@ export class AuthService {
   ) {}
 
   /**
-   * Alta de una nueva organización (ISP) en la plataforma — el equivalente
-   * al "Crear cuenta" público de WispHub. Crea la Organization, sus permisos
-   * y el rol SUPER_ADMIN, y el primer usuario que administrará esa cuenta.
-   * Cada organización queda completamente aislada de las demás.
+   * Crea la Organización (ISP) y su primer usuario dueño (rol SUPER_ADMIN).
+   * Lo usan el registro público y el panel de la plataforma. No inicia sesión.
    */
-  async registerOrganization(dto: RegisterOrganizationDto) {
+  async createOrganizationWithOwner(dto: RegisterOrganizationDto) {
     const slug = dto.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    if (RESERVED_SLUGS.includes(slug)) {
+      throw new ConflictException('Ese identificador de empresa está reservado, elige otro');
+    }
 
+    const email = dto.email.trim().toLowerCase();
     const [existingOrg, existingUser] = await Promise.all([
       this.prisma.organization.findUnique({ where: { slug } }),
-      this.prisma.user.findUnique({ where: { email: dto.email } }),
+      this.prisma.user.findUnique({ where: { email } }),
     ]);
     if (existingOrg) throw new ConflictException('Ese identificador de empresa ya está en uso');
     if (existingUser) throw new ConflictException('Ya existe una cuenta con ese correo');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    // Permisos y roles son globales al motor. Se aseguran FUERA de la
+    // transacción (son muchos upserts idempotentes) para no agotar su timeout.
+    await ensureDefaultRoles(this.prisma);
+    const superAdminRole = await this.prisma.role.findUniqueOrThrow({ where: { name: 'SUPER_ADMIN' } });
+
+    return this.prisma.$transaction(async (tx) => {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
       const organization = await tx.organization.create({
         data: { name: dto.organizationName, slug, trialEndsAt },
       });
-
-      // Permisos y rol SUPER_ADMIN son globales al motor (no por organización),
-      // se aseguran de existir sin duplicar si ya los creó el seed.
-      for (const perm of DEFAULT_PERMISSIONS) {
-        await tx.permission.upsert({ where: { key: perm.key }, update: {}, create: perm });
-      }
-      const superAdminRole = await tx.role.upsert({
-        where: { name: 'SUPER_ADMIN' },
-        update: {},
-        create: { name: 'SUPER_ADMIN', description: 'Acceso total a la cuenta', isSystem: true },
-      });
-      const allPermissions = await tx.permission.findMany();
-      for (const permission of allPermissions) {
-        await tx.rolePermission.upsert({
-          where: { roleId_permissionId: { roleId: superAdminRole.id, permissionId: permission.id } },
-          update: {},
-          create: { roleId: superAdminRole.id, permissionId: permission.id },
-        });
-      }
-
       const user = await tx.user.create({
         data: {
           organizationId: organization.id,
-          email: dto.email,
+          email,
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
           roles: { create: { roleId: superAdminRole.id } },
         },
       });
-
       return { organization, userId: user.id };
     });
+  }
+
+  /**
+   * Alta pública de una nueva cuenta de ISP — el equivalente al "Crear
+   * cuenta" de WispHub. Cada organización queda completamente aislada.
+   */
+  async registerOrganization(dto: RegisterOrganizationDto) {
+    const result = await this.createOrganizationWithOwner(dto);
 
     const fullUser = await this.prisma.user.findUniqueOrThrow({
       where: { id: result.userId },
@@ -112,7 +83,7 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: email.trim().toLowerCase() },
       include: {
         organization: true,
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
@@ -211,17 +182,5 @@ export class AuthService {
 
   async logout(userId: string) {
     await this.prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } });
-  }
-
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!matches) throw new UnauthorizedException('La contraseña actual no es correcta.');
-
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash, refreshTokenHash: null } });
-    await this.audit.log({ organizationId: user.organizationId, userId, action: 'auth.change_password', entityType: 'User', entityId: userId });
-
-    return { message: 'Contraseña actualizada. Vuelve a iniciar sesión.' };
   }
 }
