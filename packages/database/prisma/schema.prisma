@@ -91,6 +91,9 @@ model PlatformInvoice {
   paidMethod     String?               // "manual_transfer" hasta conectar un gateway real
   paidByUserId   String?               // admin de plataforma que la marcó pagada
   notes          String?
+  // El ISP avisa "ya pagué" con su referencia; el dueño lo verifica y marca pagada.
+  paymentReportedAt DateTime?
+  paymentReference  String?
   createdAt      DateTime              @default(now())
 
   @@unique([organizationId, period])

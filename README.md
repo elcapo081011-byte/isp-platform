@@ -18,18 +18,51 @@ OLT`) y se guardan encriptadas en la base de datos, asociadas a su cuenta.
 El `.env` solo trae secretos del motor: `JWT_SECRET`, la clave de cifrado,
 la conexión a Postgres y (opcional) SMTP para notificaciones.
 
-## Panel del dueño de la plataforma
+## Panel del dueño de la plataforma (tú)
 
-Un usuario con `isPlatformAdmin: true` (creado por el seed:
-`platform-owner@isp-control.local` / `PlatformAdmin123!`) puede entrar y
-ver un ítem extra en el sidebar: **"Plataforma (todas las cuentas)"**.
-Ahí se listan todas las organizaciones registradas (nombre, plan, cuántos
-clientes/usuarios/routers/OLT tiene cada una) y se pueden suspender o
-reactivar — por ejemplo, por falta de pago de tu propio servicio SaaS.
-Este usuario NO pertenece a ningún ISP cliente; vive en una organización
-interna separada (`slug: platform`) y solo tiene acceso a `/platform/*`
-(protegido por `PlatformAdminGuard`, que exige el flag explícitamente y
-nunca se asigna desde el signup público).
+El dueño es un usuario con `isPlatformAdmin: true`. **No pertenece a ningún ISP** y
+por eso NO opera clientes, planes ni red de nadie: al entrar solo ve el menú
+de plataforma (`/platform`):
+
+- **Cuentas de ISP** — todas las organizaciones, su dueño, plan/prueba, cuántos
+  clientes/usuarios/routers/OLT tienen; crear una cuenta nueva; suspender/reactivar.
+- **Usuarios (todas)** — todos los usuarios de todas las cuentas; dar de alta uno
+  en la cuenta que elijas (soporte, o si un dueño perdió el acceso).
+- **Cobros y suscripciones** — facturas que tú le cobras a cada ISP, los pagos que
+  ellos avisan, marcar como pagada, y el texto de "cómo pagar" que ellos ven.
+
+### Cómo crear TU usuario dueño
+
+Se crea al arrancar el backend con variables de entorno (no hay ningún registro
+público que pueda dar este permiso):
+
+```env
+PLATFORM_OWNER_EMAIL=tu@correo.com
+PLATFORM_OWNER_PASSWORD=una-contraseña-larga-de-12+-caracteres
+```
+
+Reinicia el backend y entra por `/login` con esos datos. Si olvidas la
+contraseña: pon `PLATFORM_OWNER_RESET_PASSWORD=true`, reinicia, y vuelve a `false`.
+Si ese correo ya existía como usuario de un ISP, se promueve a dueño.
+
+> Importante: `/register` **solo** crea cuentas de ISP. Si te registras ahí,
+> eres dueño de un ISP (con "Mi suscripción", "Usuarios", etc.), no de la plataforma.
+
+## Usuarios (staff) de cada ISP
+
+Cada ISP administra su equipo en **Usuarios** (`/usuarios`, permiso `users.manage`):
+crear, cambiar rol, resetear contraseña, desactivar. Roles: Super administrador,
+Administrador, Soporte, Técnico, Facturación, Solo monitoreo. Reglas: solo un
+Super administrador puede crear/modificar a otro; no puedes desactivarte ni dejar
+la cuenta sin ningún Super administrador; nadie ve usuarios de otra cuenta.
+
+## Suscripción a la plataforma ("Mi suscripción")
+
+Cada ISP ve sus planes (Gratis hasta 15 clientes · Básico · Pro · Ilimitado), su
+uso, sus facturas, las instrucciones de pago que tú publicas y un botón
+**"Ya pagué"** para avisarte con su referencia. **No hay cobro automático con
+tarjeta**: falta elegir país/proveedor (Stripe, MercadoPago, dLocal…). Hoy tú
+verificas el pago y lo marcas pagado; al hacerlo la cuenta se reactiva sola.
 
 ## Estado: **12 fases + multi-tenancy + panel de plataforma**
 
@@ -60,12 +93,13 @@ WhatsApp específico), el sistema:
 
 ```bash
 cp .env.example .env
-# edita .env: define contraseñas, JWT_SECRET y DEVICE_CREDENTIALS_ENCRYPTION_KEY reales
+# edita .env: contraseñas, JWT_SECRET, DEVICE_CREDENTIALS_ENCRYPTION_KEY
+# y PLATFORM_OWNER_EMAIL / PLATFORM_OWNER_PASSWORD (tu usuario dueño)
 
 docker compose up -d --build
-
-docker compose exec backend npm run migration:deploy
-docker compose exec backend npm run seed
+# Las tablas se crean solas al arrancar el backend (ver "Base de datos" abajo).
+# El seed es OPCIONAL (solo roles + datos demo en desarrollo):
+# docker compose exec backend npm run seed
 ```
 
 Accesos:
@@ -73,7 +107,7 @@ Accesos:
 - API: http://localhost:8080/api/v1
 - Swagger: http://localhost:3000/api/docs
 
-### Usuarios demo (`isDemo: true` — cámbialos antes de producción)
+### Usuarios demo (solo desarrollo; con `NODE_ENV=production` el seed NO los crea salvo `SEED_DEMO_DATA=true`)
 
 Estos pertenecen a la organización demo creada por el seed ("Fibra Demo ISP").
 Para probar el aislamiento multi-tenant de verdad, crea una segunda cuenta
@@ -84,6 +118,20 @@ en `/register` y confirma que no ve nada de la organización demo.
 | Super Admin | superadmin@demo.isp | ChangeMe123! |
 | Admin | admin@demo.isp | ChangeMe123! |
 | Técnico | tecnico@demo.isp | ChangeMe123! |
+
+## Base de datos y migraciones
+
+El repo aún no trae carpeta `packages/database/prisma/migrations/`. Mientras no
+exista, el arranque del contenedor sincroniza el esquema con `prisma db push`
+(nunca con `--accept-data-loss`). Cuando quieras historial versionado, genera la
+migración inicial una vez en tu máquina y súbela al repo:
+
+```bash
+cd apps/backend
+npx prisma migrate dev --name init --schema=../../packages/database/prisma/schema.prisma
+```
+
+A partir de ahí el arranque usa `prisma migrate deploy` automáticamente.
 
 ## Desarrollo local (sin Docker para backend/frontend)
 
@@ -111,7 +159,7 @@ npm test
 ## Estructura del proyecto
 
 ```
-apps/backend        NestJS — API REST modular (18 módulos)
+apps/backend        NestJS — API REST modular (19 módulos, incl. usuarios)
 apps/frontend        React + Vite + Tailwind
 packages/database     Prisma schema, migraciones, seed
 apps/backend/src/network-drivers   Interfaces RouterProvider / OltProvider + mocks

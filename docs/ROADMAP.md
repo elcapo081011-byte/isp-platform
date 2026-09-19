@@ -32,15 +32,27 @@ maqueta visual.
       automático (Stripe/MercadoPago/etc.) queda pendiente de definir país y proveedor —
       declarado explícitamente, no simulado.
 
-- [x] **Fase 14** — Gestión de usuarios (el permiso `users.manage` existía desde el
-      principio pero nunca se había construido el endpoint, por eso no se podía crear un
-      usuario nuevo dentro de una cuenta): alta de usuarios con roles, activar/desactivar,
-      cambiar roles — todo dentro de tu propia organización. Además, cuenta real del dueño
-      de la plataforma (sembrada por `npm run seed`, ver `docs/PRODUCCION.md`), que al
-      iniciar sesión entra directo al panel de Plataforma sin ver el menú operativo de un
-      ISP. También se agregó la tabla completa de planes visible en "Mi suscripción" con un
-      botón "Quiero este plan" (deja una solicitud registrada y te avisa por correo, ya que
-      todavía no hay cobro automático con tarjeta).
+- [x] **Fase 14** — Usuarios/staff por ISP (`/users`, permiso `users.manage`); dueño de la
+      plataforma creado por variables de entorno (sin credenciales públicas) con menú y rutas
+      propias; alta de cuentas y usuarios desde el panel de plataforma; "Mi suscripción" con
+      catálogo de planes, instrucciones de pago y "Ya pagué"; corrección del menú desactualizado
+      (`.js` compilados que tapaban a los `.tsx`) y del arranque sin migraciones.
+
+## Brecha frente a WispHub (lo que aún falta, verificado en wisphub.net)
+
+Prioridad sugerida, de mayor a menor impacto para un ISP que quiera migrar:
+
+1. **Portal del cliente + app móvil** (ver estado de cuenta, pagar, reportar pago, consumo).
+2. **Pasarelas de pago automáticas** para los cobros de cada ISP a sus clientes y para tu
+   suscripción SaaS (WispHub integra Stripe y pasarelas locales por país).
+3. **Notificaciones SMS/WhatsApp** (recordatorios de pago, confirmaciones, avisos de corte).
+4. **Zonas y permisos de staff por zona/router** (WispHub limita qué routers/clientes ve cada empleado).
+5. **Importar clientes y planes desde el MikroTik** y modos de control adicionales
+   (Simple Queue, PCQ + Address List, Hotspot/fichas, DHCP, IP binding — hoy solo PPPoE).
+6. **Planes de pago personalizados y servicios adicionales** (un solo pago, fechas inicio/fin, TV/telefonía).
+7. **Plantillas editables** de factura/contrato con firma digital, y facturación electrónica por país.
+8. **Actualización masiva** de clientes, IPv6, log de acciones por cliente/factura.
+9. **API pública documentada** para integraciones (hoy hay API Keys, falta el catálogo de endpoints).
 
 ## Lo que queda fuera de este ciclo, honestamente
 
