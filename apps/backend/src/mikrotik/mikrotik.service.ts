@@ -3,7 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { CredentialsEncryptionService } from '../common/crypto/credentials-encryption.service';
 import { RouterOsProvider } from './routeros.provider';
-import { CreateRouterDto } from './dto/router.dto';
+import { CreateRouterDto, UpdateRouterDto } from './dto/router.dto';
 import { RouterCredentials } from '../network-drivers/router-provider.interface';
 
 /**
@@ -28,6 +28,7 @@ export class MikrotikService {
       select: {
         id: true, name: true, host: true, port: true, location: true,
         status: true, lastCheckedAt: true, lastError: true, isDemo: true,
+        username: true, useTls: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -49,6 +50,38 @@ export class MikrotikService {
     await this.audit.log({ organizationId, userId, action: 'router.create', entityType: 'Router', entityId: router.id, ipAddress: ip });
     const { encryptedPassword, ...safe } = router;
     return safe;
+  }
+
+  async update(organizationId: string, routerId: string, dto: UpdateRouterDto, userId: string, ip?: string) {
+    const existing = await this.prisma.router.findFirst({ where: { id: routerId, organizationId } });
+    if (!existing) throw new NotFoundException('Router no encontrado');
+
+    const router = await this.prisma.router.update({
+      where: { id: routerId },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.host !== undefined && { host: dto.host }),
+        ...(dto.port !== undefined && { port: dto.port }),
+        ...(dto.username !== undefined && { username: dto.username }),
+        ...(dto.password !== undefined && { encryptedPassword: this.crypto.encrypt(dto.password) }),
+        ...(dto.useTls !== undefined && { useTls: dto.useTls }),
+        ...(dto.location !== undefined && { location: dto.location }),
+      },
+    });
+    await this.audit.log({ organizationId, userId, action: 'router.update', entityType: 'Router', entityId: router.id, ipAddress: ip });
+    const { encryptedPassword, ...safe } = router;
+    return safe;
+  }
+
+  async remove(organizationId: string, routerId: string, userId: string, ip?: string) {
+    const existing = await this.prisma.router.findFirst({ where: { id: routerId, organizationId } });
+    if (!existing) throw new NotFoundException('Router no encontrado');
+
+    // Los Service que apuntaban a este router quedan con routerId = null
+    // (onDelete: SetNull en el schema) — no se borra al cliente ni su servicio.
+    await this.prisma.router.delete({ where: { id: routerId } });
+    await this.audit.log({ organizationId, userId, action: 'router.delete', entityType: 'Router', entityId: routerId, ipAddress: ip, before: existing });
+    return { deleted: true, id: routerId, name: existing.name };
   }
 
   /**
