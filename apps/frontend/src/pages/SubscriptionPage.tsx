@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, AlertTriangle } from 'lucide-react';
+import { CreditCard, AlertTriangle, Check } from 'lucide-react';
 import { api } from '../lib/api';
+import { useToast } from '../components/Toast';
 
 interface Usage {
   plan: string;
@@ -43,22 +44,49 @@ const STATUS_CLASS: Record<PlatformInvoice['status'], string> = {
   CANCELLED: 'text-muted',
 };
 
+interface Tier {
+  name: string;
+  maxClients: number | null;
+  monthlyPrice: number;
+}
+
+const TIER_LABEL: Record<string, string> = { FREE: 'Gratis', BASIC: 'Básico', PRO: 'Pro', ENTERPRISE: 'Ilimitado' };
+
 export function SubscriptionPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [invoices, setInvoices] = useState<PlatformInvoice[]>([]);
+  const [tiers, setTiers] = useState<Tier[]>([]);
+  const [requesting, setRequesting] = useState<string | null>(null);
+  const [requestedTier, setRequestedTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
     (async () => {
-      const [usageRes, invoicesRes] = await Promise.all([
+      const [usageRes, invoicesRes, tiersRes] = await Promise.all([
         api.get('/billing/subscription'),
         api.get('/billing/subscription/invoices'),
+        api.get('/billing/subscription/tiers'),
       ]);
       setUsage(usageRes.data);
       setInvoices(invoicesRes.data);
+      setTiers(tiersRes.data);
       setLoading(false);
     })();
   }, []);
+
+  async function requestUpgrade(tierName: string) {
+    setRequesting(tierName);
+    try {
+      await api.post('/billing/subscription/upgrade-request', { tier: tierName });
+      setRequestedTier(tierName);
+      toast.success('Listo, le avisamos al equipo de la plataforma. Te van a contactar para coordinar el pago.');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'No se pudo enviar la solicitud.');
+    } finally {
+      setRequesting(null);
+    }
+  }
 
   if (loading || !usage) {
     return (
@@ -160,6 +188,40 @@ export function SubscriptionPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="border border-border rounded-md overflow-hidden mb-6">
+        <div className="px-4 py-3 border-b border-border">
+          <p className="text-sm font-medium">Planes disponibles</p>
+          <p className="text-xs text-muted mt-0.5">Sin pasarela automática todavía: pide el plan y coordinamos el pago contigo.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border">
+          {tiers.map((t) => {
+            const isCurrent = t.name === usage.tier;
+            const alreadyRequested = requestedTier === t.name;
+            return (
+              <div key={t.name} className={`p-4 flex flex-col ${isCurrent ? 'bg-surface-raised' : ''}`}>
+                <p className="text-xs uppercase tracking-wide text-muted mb-1">{TIER_LABEL[t.name] ?? t.name}</p>
+                <p className="text-2xl font-display font-bold mb-1">
+                  {t.monthlyPrice > 0 ? `${usage.currency} ${t.monthlyPrice}` : 'Gratis'}
+                  {t.monthlyPrice > 0 && <span className="text-xs text-muted font-normal">/mes</span>}
+                </p>
+                <p className="text-xs text-muted mb-4">{t.maxClients ? `Hasta ${t.maxClients} clientes` : 'Clientes ilimitados'}</p>
+                {isCurrent ? (
+                  <span className="mt-auto flex items-center gap-1 text-xs text-ok font-medium"><Check size={14} /> Tu plan actual</span>
+                ) : (
+                  <button
+                    onClick={() => requestUpgrade(t.name)}
+                    disabled={requesting === t.name || alreadyRequested}
+                    className="mt-auto text-xs bg-signal text-base font-medium rounded-md px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {alreadyRequested ? 'Solicitado ✓' : requesting === t.name ? 'Enviando…' : 'Quiero este plan'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="border border-border rounded-md p-5 flex items-start gap-3">

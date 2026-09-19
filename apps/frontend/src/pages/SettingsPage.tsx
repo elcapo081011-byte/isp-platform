@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { api } from '../lib/api';
 import { useUIStore, ACCENT_OPTIONS } from '../store/ui.store';
 import { useToast } from '../components/Toast';
+import { useAuthStore } from '../store/auth.store';
 
 export function SettingsPage() {
   const [graceDays, setGraceDays] = useState('3');
@@ -100,7 +101,54 @@ export function SettingsPage() {
           Guardar cambios
         </button>
       </div>
+
+      <PasswordPanel />
     </div>
+  );
+}
+
+function PasswordPanel() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const clearSession = useAuthStore((s) => s.clearSession);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post('/auth/change-password', { currentPassword, newPassword });
+      toast.success('Contraseña actualizada. Vuelve a iniciar sesión.');
+      clearSession();
+      window.location.href = '/login';
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'No se pudo cambiar la contraseña.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="status-panel status-panel--neutral space-y-3">
+      <p className="text-sm font-medium">Cambiar mi contraseña</p>
+      <p className="text-xs text-muted -mt-2">
+        Si entraste con la contraseña por defecto del dueño de la plataforma (o cualquier otra temporal), cámbiala aquí.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-muted mb-1">Contraseña actual</label>
+          <input required type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" />
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Contraseña nueva</label>
+          <input required type="password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" />
+        </div>
+      </div>
+      <button type="submit" disabled={saving} className="bg-signal text-base text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">
+        {saving ? 'Guardando…' : 'Cambiar contraseña'}
+      </button>
+    </form>
   );
 }
 

@@ -66,6 +66,7 @@ const NAV: NavGroup[] = [
     label: 'Gestión',
     items: [
       { to: '/inventario', label: 'Inventario', icon: Archive, live: true },
+      { to: '/usuarios', label: 'Usuarios', icon: Users, live: true },
       { to: '/reportes', label: 'Reportes', icon: BarChart3, live: false },
       { to: '/auditoria', label: 'Auditoría', icon: Building2, live: false },
     ],
@@ -125,7 +126,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-3 overflow-y-auto overflow-x-hidden">
-          {NAV.map((group, gi) => (
+          {!user?.isPlatformAdmin && NAV.map((group, gi) => (
             <div key={gi}>
               {group.label && (
                 <p className={`px-3 pb-1 text-[10px] font-medium text-muted/70 uppercase tracking-wider ${collapsed ? 'md:hidden' : ''}`}>
@@ -167,6 +168,19 @@ export function AppLayout() {
               >
                 <FileText size={16} strokeWidth={2} className="shrink-0" />
                 <span className={collapsed ? 'md:hidden' : ''}>Cobros de la plataforma</span>
+              </NavLink>
+              <NavLink
+                to="/settings"
+                onClick={() => setMobileOpen(false)}
+                title={collapsed ? 'Configuración' : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                    isActive ? 'bg-surface-raised text-ink' : 'text-signal hover:text-ink hover:bg-surface-raised/60'
+                  } ${collapsed ? 'md:justify-center' : ''}`
+                }
+              >
+                <Settings size={16} strokeWidth={2} className="shrink-0" />
+                <span className={collapsed ? 'md:hidden' : ''}>Configuración</span>
               </NavLink>
             </div>
           )}

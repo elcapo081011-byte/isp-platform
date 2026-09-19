@@ -17,6 +17,13 @@ interface PlatformInvoice {
   paidMethod: string | null;
 }
 
+interface UpgradeRequest {
+  id: string;
+  organization: { name: string; slug: string };
+  after: { tier: string; monthlyPrice: number } | null;
+  createdAt: string;
+}
+
 const FILTERS = [
   { value: '', label: 'Todas' },
   { value: 'OVERDUE', label: 'Vencidas' },
@@ -33,6 +40,7 @@ const STATUS_CLASS: Record<PlatformInvoice['status'], string> = {
 
 export function PlatformBillingPage() {
   const [invoices, setInvoices] = useState<PlatformInvoice[]>([]);
+  const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([]);
   const [filter, setFilter] = useState('OVERDUE');
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -40,8 +48,12 @@ export function PlatformBillingPage() {
 
   async function load() {
     setLoading(true);
-    const res = await api.get('/platform/billing/invoices', { params: filter ? { status: filter } : {} });
-    setInvoices(res.data);
+    const [invoicesRes, upgradeRes] = await Promise.all([
+      api.get('/platform/billing/invoices', { params: filter ? { status: filter } : {} }),
+      api.get('/platform/billing/upgrade-requests'),
+    ]);
+    setInvoices(invoicesRes.data);
+    setUpgradeRequests(upgradeRes.data);
     setLoading(false);
   }
 
@@ -69,6 +81,23 @@ export function PlatformBillingPage() {
         Lo que cada ISP te debe a ti por usar el sistema. No hay pasarela de pago automática conectada todavía —
         marca aquí una factura como pagada apenas confirmes el pago por fuera (transferencia, efectivo, etc.).
       </p>
+
+      {upgradeRequests.length > 0 && (
+        <div className="border border-signal/40 bg-surface-raised rounded-md p-4 mb-6">
+          <p className="text-sm font-medium mb-2">ISP que pidieron subir de plan</p>
+          <div className="space-y-1.5">
+            {upgradeRequests.map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-sm">
+                <span>
+                  <strong>{r.organization.name}</strong> quiere el plan {r.after?.tier ?? '—'}
+                  {r.after?.monthlyPrice ? ` (${r.after.monthlyPrice}/mes)` : ''}
+                </span>
+                <span className="text-xs text-muted">{new Date(r.createdAt).toLocaleString('es')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4">
         {FILTERS.map((f) => (
