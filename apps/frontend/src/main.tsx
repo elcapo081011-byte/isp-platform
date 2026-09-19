@@ -17,6 +17,7 @@ const CustomerProfilePage = lazy(() => import('./pages/CustomerProfilePage').the
 const NewCustomerPage = lazy(() => import('./pages/NewCustomerPage').then((m) => ({ default: m.NewCustomerPage })));
 const PlansPage = lazy(() => import('./pages/PlansPage').then((m) => ({ default: m.PlansPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then((m) => ({ default: m.BillingPage })));
+const MikrotikRouterPage = lazy(() => import('./pages/MikrotikRouterPage').then((m) => ({ default: m.MikrotikRouterPage })));
 const MikrotikPage = lazy(() => import('./pages/MikrotikPage').then((m) => ({ default: m.MikrotikPage })));
 const OltPage = lazy(() => import('./pages/OltPage').then((m) => ({ default: m.OltPage })));
 const OnuPage = lazy(() => import('./pages/OnuPage').then((m) => ({ default: m.OnuPage })));
@@ -65,6 +66,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="planes" element={<PlansPage />} />
                 <Route path="facturacion" element={<BillingPage />} />
                 <Route path="mikrotik" element={<MikrotikPage />} />
+                <Route path="mikrotik/nuevo" element={<MikrotikRouterPage />} />
+                <Route path="mikrotik/:id" element={<MikrotikRouterPage />} />
                 <Route path="olt" element={<OltPage />} />
                 <Route path="onu" element={<OnuPage />} />
                 <Route path="tickets" element={<TicketsPage />} />

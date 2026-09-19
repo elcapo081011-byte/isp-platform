@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { api } from '../lib/api';
-import { Plan } from '../lib/types';
+import { Plan, Router } from '../lib/types';
 import { useToast } from '../components/Toast';
 
 const STEPS = ['Datos personales', 'Servicio', 'Confirmar'] as const;
@@ -12,6 +12,7 @@ export function NewCustomerPage() {
   const toast = useToast();
   const [step, setStep] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [routers, setRouters] = useState<Router[]>([]);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -21,12 +22,16 @@ export function NewCustomerPage() {
     address: '',
     planId: '',
     pppoeUsername: '',
+    pppoePassword: '',
+    routerId: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.get('/plans', { params: { status: 'ACTIVE' } }).then((res) => setPlans(res.data));
+    // Sin permiso de MikroTik (p. ej. rol Soporte) simplemente no hay selector de router.
+    api.get('/mikrotik/routers').then((res) => setRouters(res.data)).catch(() => {});
   }, []);
 
   function field(key: keyof typeof form) {
@@ -62,8 +67,13 @@ export function NewCustomerPage() {
         documentId: form.documentId || undefined,
         planId: form.planId || undefined,
         pppoeUsername: form.pppoeUsername || undefined,
+        pppoePassword: form.pppoePassword || undefined,
+        routerId: form.routerId || undefined,
       });
-      toast.success('Cliente creado.');
+      const net = data.networkAction;
+      if (net?.applied) toast.success('Cliente creado y agregado al MikroTik.');
+      else if (net) toast.error(`Cliente creado, pero NO se agregó al router: ${net.reason ?? 'error desconocido'}`);
+      else toast.success('Cliente creado.');
       navigate(`/clientes/${data.id}`);
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'No se pudo crear el cliente. Verifica los datos.');
@@ -130,8 +140,30 @@ export function NewCustomerPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm text-muted mb-1.5">Router / zona</label>
+                <select
+                  {...field('routerId')}
+                  disabled={!form.planId}
+                  className="w-full bg-surface border border-border rounded-md px-3 py-2.5 text-sm outline-none focus:border-signal disabled:opacity-50"
+                >
+                  <option value="">Sin router por ahora</option>
+                  {routers.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}{r.status === 'OFFLINE' ? ' (sin conexión)' : ''}</option>
+                  ))}
+                </select>
+                {!form.planId && <p className="text-xs text-muted mt-1">Elige primero un plan.</p>}
+              </div>
               <Input label="Usuario PPPoE" {...field('pppoeUsername')} />
+              <Input label="Contraseña PPPoE" type="password" autoComplete="new-password" {...field('pppoePassword')} />
             </div>
+            {form.routerId && (
+              <p className="text-xs text-muted">
+                Al crear el cliente se agrega su usuario PPPoE al MikroTik con el perfil de su plan
+                (si el router tiene activado “Agregar cliente en MikroTik” y el plan tiene un perfil definido).
+                A partir de ahí el corte por falta de pago se aplica en ese router.
+              </p>
+            )}
           </div>
         )}
 
@@ -145,6 +177,7 @@ export function NewCustomerPage() {
               <Row label="Email" value={form.email || '—'} />
               <Row label="Dirección" value={form.address || '—'} />
               <Row label="Plan" value={selectedPlan ? `${selectedPlan.name} ($${selectedPlan.price})` : 'Sin plan'} />
+              <Row label="Router" value={routers.find((r) => r.id === form.routerId)?.name ?? 'Sin router'} />
               <Row label="Usuario PPPoE" value={form.pppoeUsername || '—'} />
             </div>
           </div>

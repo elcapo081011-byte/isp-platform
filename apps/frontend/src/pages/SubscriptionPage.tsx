@@ -79,22 +79,20 @@ export function SubscriptionPage() {
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    try {
-      const [usageRes, plansRes, payRes, invoicesRes] = await Promise.all([
-        api.get('/billing/subscription'),
-        api.get('/billing/subscription/plans'),
-        api.get('/billing/subscription/payment-info'),
-        api.get('/billing/subscription/invoices'),
-      ]);
-      setUsage(usageRes.data);
-      setPlans(plansRes.data.plans);
-      setInstructions(payRes.data.instructions);
-      setInvoices(invoicesRes.data);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'No se pudo cargar tu suscripción.');
-    } finally {
-      setLoading(false);
-    }
+    // Cada bloque se pide por separado: si uno falla (p. ej. un backend sin
+    // actualizar), el resto de la página sigue funcionando.
+    const [usageRes, plansRes, payRes, invoicesRes] = await Promise.allSettled([
+      api.get('/billing/subscription'),
+      api.get('/billing/subscription/plans'),
+      api.get('/billing/subscription/payment-info'),
+      api.get('/billing/subscription/invoices'),
+    ]);
+    if (usageRes.status === 'fulfilled') setUsage(usageRes.value.data);
+    else toast.error(usageRes.reason?.response?.data?.message ?? 'No se pudo cargar tu suscripción.');
+    if (plansRes.status === 'fulfilled') setPlans(plansRes.value.data.plans);
+    if (payRes.status === 'fulfilled') setInstructions(payRes.value.data.instructions);
+    if (invoicesRes.status === 'fulfilled') setInvoices(invoicesRes.value.data);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -202,6 +200,7 @@ export function SubscriptionPage() {
         )}
       </div>
 
+      {plans.length > 0 && (<>
       <h2 className="text-lg font-display font-bold mb-1">Planes</h2>
       <p className="text-muted text-sm mb-3">
         No tienes que elegir ni comprar por adelantado: la plataforma te ubica en el plan que corresponde a tu número de
@@ -229,6 +228,7 @@ export function SubscriptionPage() {
           </div>
         ))}
       </div>
+      </>)}
 
       <div className="border border-border rounded-md p-5 mb-6">
         <div className="flex items-start gap-3">

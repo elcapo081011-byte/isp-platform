@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PauseCircle, PlayCircle, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { Modal } from '../components/Modal';
+import { Plan, Router } from '../lib/types';
 
 const TABS = ['Resumen', 'Servicio', 'Facturación', 'Conexión', 'OLT / ONU', 'Tickets', 'Historial'] as const;
 type Tab = typeof TABS[number];
@@ -16,6 +18,51 @@ export function CustomerProfilePage() {
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+
+  // Cambiar plan / router / usuario PPPoE del servicio
+  const [svcOpen, setSvcOpen] = useState(false);
+  const [svcSaving, setSvcSaving] = useState(false);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [routers, setRouters] = useState<Router[]>([]);
+  const [svcForm, setSvcForm] = useState({ planId: '', routerId: '', pppoeUsername: '', pppoePassword: '' });
+
+  async function openServiceEditor() {
+    const current = profile?.service?.[0];
+    setSvcForm({
+      planId: current?.planId ?? '',
+      routerId: current?.routerId ?? '',
+      pppoeUsername: current?.pppoeUsername ?? '',
+      pppoePassword: '',
+    });
+    setSvcOpen(true);
+    api.get('/plans', { params: { status: 'ACTIVE' } }).then((r) => setPlans(r.data)).catch(() => {});
+    api.get('/mikrotik/routers').then((r) => setRouters(r.data)).catch(() => {});
+  }
+
+  async function saveService(e: FormEvent) {
+    e.preventDefault();
+    setSvcSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        planId: svcForm.planId || undefined,
+        routerId: svcForm.routerId, // '' = sin router
+        pppoeUsername: svcForm.pppoeUsername,
+      };
+      if (svcForm.pppoePassword) body.pppoePassword = svcForm.pppoePassword;
+      const { data } = await api.put(`/customers/${id}/service`, body);
+      const net = data.networkAction;
+      if (net && net.applied === false) toast.warning(`Servicio guardado, pero el router no se actualizó: ${net.reason ?? 'sin detalle'}`);
+      else if (net?.warning) toast.warning(`Servicio guardado. ${net.warning}`);
+      else toast.success(net?.applied ? 'Servicio guardado y sincronizado con el MikroTik.' : 'Servicio guardado.');
+      setSvcOpen(false);
+      await load();
+    } catch (err: any) {
+      const m = err?.response?.data?.message;
+      toast.error(Array.isArray(m) ? m.join(' · ') : m ?? 'No se pudo guardar el servicio.');
+    } finally {
+      setSvcSaving(false);
+    }
+  }
 
   async function load() {
     const { data } = await api.get(`/customers/${id}`);
@@ -126,6 +173,11 @@ export function CustomerProfilePage() {
 
       {tab === 'Servicio' && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <button onClick={openServiceEditor} className="text-sm border border-border rounded-md px-3 py-1.5 hover:bg-surface-raised">
+              {profile.service.length === 0 ? 'Asignar servicio' : 'Cambiar plan / router'}
+            </button>
+          </div>
           {profile.service.length === 0 ? (
             <p className="text-muted text-sm">Este cliente no tiene un servicio activo todavía.</p>
           ) : (
@@ -141,6 +193,7 @@ export function CustomerProfilePage() {
                   <StatusBadge status={s.status} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-3 border-t border-border">
+                  <Field label="Router / zona" value={s.router?.name ?? 'Sin router asignado'} />
                   <Field label="Usuario PPPoE" value={s.pppoeUsername} />
                   <Field label="IP" value={s.ipAddress} />
                   <Field label="VLAN" value={s.plan.vlan} />
@@ -245,6 +298,52 @@ export function CustomerProfilePage() {
       )}
 
       {tab === 'Historial' && <AuditList items={profile.history} />}
+
+      {svcOpen && (
+        <Modal
+          title={profile.service.length === 0 ? 'Asignar servicio' : 'Cambiar plan / router'}
+          subtitle="Al guardar, el usuario PPPoE se crea en el router elegido y se quita del anterior."
+          onClose={() => setSvcOpen(false)}
+        >
+          <form onSubmit={saveService} className="space-y-4">
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Plan</label>
+              <select required className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" value={svcForm.planId} onChange={(e) => setSvcForm({ ...svcForm, planId: e.target.value })}>
+                <option value="">Elige un plan…</option>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}{p.mikrotikProfile ? '' : ' (sin perfil MikroTik)'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Router / zona</label>
+              <select className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" value={svcForm.routerId} onChange={(e) => setSvcForm({ ...svcForm, routerId: e.target.value })}>
+                <option value="">Sin router</option>
+                {routers.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}{r.status === 'OFFLINE' ? ' (sin conexión)' : ''}</option>
+                ))}
+              </select>
+            </div>
+            {svcForm.routerId && (
+              <>
+                <div>
+                  <label className="block text-sm text-muted mb-1.5">Usuario PPPoE</label>
+                  <input required className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" value={svcForm.pppoeUsername} onChange={(e) => setSvcForm({ ...svcForm, pppoeUsername: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted mb-1.5">Contraseña PPPoE</label>
+                  <input type="password" minLength={4} autoComplete="new-password" placeholder="Vacía = usar la que ya está guardada" className="w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal" value={svcForm.pppoePassword} onChange={(e) => setSvcForm({ ...svcForm, pppoePassword: e.target.value })} />
+                  <p className="text-xs text-muted mt-1.5">Los clientes anteriores a esta versión no tienen contraseña guardada: escríbela para poder crearlos en el router.</p>
+                </div>
+              </>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setSvcOpen(false)} className="text-sm text-muted hover:text-ink px-4 py-2">Cancelar</button>
+              <button type="submit" disabled={svcSaving} className="bg-signal text-base text-sm font-medium rounded-md px-5 py-2 disabled:opacity-50">{svcSaving ? 'Guardando…' : 'Guardar'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -1,43 +1,23 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, Wifi, WifiOff, RefreshCw, X, Users, Activity, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Router } from '../lib/types';
 import { useToast } from '../components/Toast';
-
-const EMPTY_FORM = {
-  name: '',
-  host: '',
-  port: '8728',
-  username: '',
-  password: '',
-  useTls: false,
-  location: '',
-};
-
-type FormState = typeof EMPTY_FORM;
-
-function fieldClass() {
-  return 'w-full bg-surface-raised border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-signal transition-colors';
-}
-
-function labelClass() {
-  return 'block text-xs text-muted mb-1.5';
-}
+import { useConfirm } from '../components/ConfirmDialog';
 
 export function MikrotikPage() {
   const [routers, setRouters] = useState<Router[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [detail, setDetail] = useState<Router | null>(null);
   const [sessions, setSessions] = useState<any[] | null>(null);
   const [systemInfo, setSystemInfo] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
 
   async function load() {
     setLoading(true);
@@ -56,40 +36,29 @@ export function MikrotikPage() {
   async function check(id: string) {
     setChecking(id);
     try {
-      await api.post(`/mikrotik/routers/${id}/check-connection`);
+      const { data } = await api.post(`/mikrotik/routers/${id}/check-connection`);
+      if (data.status === 'ONLINE') toast.success('Conexión exitosa.');
+      else toast.error(data.error ?? 'No se pudo conectar con el router.');
       await load();
     } finally {
       setChecking(null);
     }
   }
 
-  function openCreate() {
-    setForm(EMPTY_FORM);
-    setError(null);
-    setModalOpen(true);
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  async function remove(r: Router) {
+    const ok = await confirm({
+      title: `¿Eliminar "${r.name}"?`,
+      description: 'Se borra su configuración de la plataforma (no se toca el MikroTik). Si hay clientes asignados a este router, no se podrá eliminar.',
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await api.post('/mikrotik/routers', {
-        name: form.name,
-        host: form.host,
-        port: form.port ? Number(form.port) : undefined,
-        username: form.username,
-        password: form.password,
-        useTls: form.useTls,
-        location: form.location || undefined,
-      });
-      setModalOpen(false);
-      toast.success('Router agregado. Verificando conexión…');
+      await api.delete(`/mikrotik/routers/${r.id}`);
+      toast.success('Router eliminado.');
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'No se pudo guardar el router. Verifica los datos de conexión.');
-    } finally {
-      setSaving(false);
+      toast.error(err?.response?.data?.message ?? 'No se pudo eliminar el router.');
     }
   }
 
@@ -119,20 +88,20 @@ export function MikrotikPage() {
             Cada router se consulta en vivo por la API de RouterOS — el estado que ves nunca es simulado.
           </p>
         </div>
-        <button
-          onClick={openCreate}
+        <Link
+          to="/mikrotik/nuevo"
           className="flex items-center gap-2 bg-signal text-base text-sm font-medium rounded-md px-4 py-2 hover:opacity-90 transition-opacity shrink-0"
         >
           <Plus size={16} /> Agregar router
-        </button>
+        </Link>
       </div>
 
       {loading ? (
         <p className="text-muted text-sm">Cargando routers…</p>
       ) : routers.length === 0 ? (
         <div className="status-panel status-panel--neutral text-sm text-muted">
-          No hay routers registrados todavía. Agrega el primero con "Agregar router" — necesitarás su IP,
-          usuario y contraseña de la API de RouterOS (Winbox → IP → Services → api, puerto 8728 por defecto).
+          No hay routers registrados todavía. Agrega el primero con "Agregar router": guardas su IP o DDNS, y el sistema te da un
+          script para pegar en el MikroTik que crea el usuario de API por ti.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -148,6 +117,10 @@ export function MikrotikPage() {
                   <p className="font-medium">{r.name}</p>
                   <p className="text-xs text-muted">
                     {r.host}:{r.port} · {r.location ?? 'sin ubicación'}
+                  </p>
+                  <p className="text-[11px] text-muted mt-0.5">
+                    {r.servicesCount ?? 0} cliente(s) · RouterOS {r.routerOsVersion} ·{' '}
+                    {r.zone ? 'zona de facturación configurada' : 'reglas globales de facturación'}
                   </p>
                 </div>
                 {r.status === 'ONLINE' ? <Wifi className="text-ok" size={18} /> : <WifiOff className="text-muted" size={18} />}
@@ -173,124 +146,17 @@ export function MikrotikPage() {
                   <Activity size={12} />
                   Ver detalle
                 </button>
+                <button onClick={() => navigate(`/mikrotik/${r.id}`)} className="flex items-center gap-1.5 text-xs text-muted hover:text-ink">
+                  <Pencil size={12} /> Editar
+                </button>
+                <button onClick={() => remove(r)} className="flex items-center gap-1.5 text-xs text-muted hover:text-critical">
+                  <Trash2 size={12} /> Eliminar
+                </button>
               </div>
 
               {r.isDemo && <p className="text-[10px] text-muted/70 mt-2">Dato demo</p>}
             </div>
           ))}
-        </div>
-      )}
-
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-6 pt-[8vh]"
-          onClick={() => setModalOpen(false)}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-surface border border-border rounded-lg shadow-2xl">
-            <div className="flex items-start justify-between border-b border-border px-6 py-4">
-              <div>
-                <h2 className="font-display font-bold text-lg">Agregar router MikroTik</h2>
-                <p className="text-xs text-muted mt-0.5">La contraseña se guarda cifrada, nunca en texto plano.</p>
-              </div>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink p-1 -mr-1 -mt-1" aria-label="Cerrar">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-              {error && <div className="status-panel status-panel--critical text-sm text-critical py-2.5">{error}</div>}
-
-              <div>
-                <label className={labelClass()}>Nombre</label>
-                <input
-                  required
-                  placeholder="Ej. Router Principal - Zona Norte"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className={fieldClass()}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className={labelClass()}>Dirección IP</label>
-                  <input
-                    required
-                    placeholder="192.168.1.1"
-                    value={form.host}
-                    onChange={(e) => setForm({ ...form, host: e.target.value })}
-                    className={fieldClass()}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass()}>Puerto API</label>
-                  <input
-                    type="number"
-                    value={form.port}
-                    onChange={(e) => setForm({ ...form, port: e.target.value })}
-                    className={fieldClass()}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass()}>Usuario</label>
-                  <input
-                    required
-                    autoComplete="off"
-                    value={form.username}
-                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    className={fieldClass()}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass()}>Contraseña</label>
-                  <input
-                    required
-                    type="password"
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className={fieldClass()}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass()}>Ubicación (opcional)</label>
-                <input
-                  placeholder="Ej. Torre Central"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  className={fieldClass()}
-                />
-              </div>
-
-              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={form.useTls}
-                  onChange={(e) => setForm({ ...form, useTls: e.target.checked })}
-                  className="rounded border-border accent-signal"
-                />
-                Usar API-SSL (puerto 8729)
-              </label>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="text-sm text-muted hover:text-ink px-4 py-2">
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="bg-signal text-base text-sm font-medium rounded-md px-5 py-2 disabled:opacity-50"
-                >
-                  {saving ? 'Guardando…' : 'Guardar router'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
