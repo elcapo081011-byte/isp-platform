@@ -62,6 +62,10 @@ export class NotificationsService {
     switch (params.event) {
       case 'invoice.due_soon':
         return `Hola ${name}, tu factura ${params.payload.invoiceNumber} vence el ${params.payload.dueDate}.`;
+      case 'invoice.created':
+        return `Hola ${name}, se generó tu factura ${params.payload.invoiceNumber} por ${params.payload.total}. Vence el ${params.payload.dueDate}.`;
+      case 'invoice.reminder':
+        return `Hola ${name}, te recordamos que tu factura ${params.payload.invoiceNumber} vence el ${params.payload.dueDate}.`;
       case 'customer.suspended':
         return `Hola ${name}, tu servicio fue suspendido por falta de pago de la factura ${params.payload.invoiceNumber}.`;
       case 'customer.reactivated':

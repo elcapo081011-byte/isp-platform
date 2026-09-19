@@ -100,6 +100,38 @@ export class BillingService {
     );
   }
 
+  /**
+   * Factura emitida por el motor automático (sin usuario detrás). Deja
+   * auditoría sin `userId`, porque no hay una persona que la creó.
+   */
+  async createSystemInvoice(
+    organizationId: string,
+    data: { customerId: string; serviceId: string; amount: number; surcharge: number; currency?: string; dueDate: Date; notes?: string },
+  ) {
+    const number = await this.nextInvoiceNumber(organizationId);
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        organizationId,
+        number,
+        customerId: data.customerId,
+        serviceId: data.serviceId,
+        amount: data.amount,
+        surcharge: data.surcharge,
+        currency: data.currency,
+        dueDate: data.dueDate,
+        notes: data.notes,
+      },
+    });
+    await this.audit.log({
+      organizationId,
+      action: 'invoice.auto_create',
+      entityType: 'Invoice',
+      entityId: invoice.id,
+      after: { number, amount: data.amount, surcharge: data.surcharge, dueDate: data.dueDate },
+    });
+    return invoice;
+  }
+
   async registerPayment(organizationId: string, invoiceId: string, dto: RegisterPaymentDto, userId: string, ip?: string) {
     const invoice = await this.findOwned(organizationId, invoiceId);
     if (invoice.status === 'CANCELLED') throw new BadRequestException('No se puede pagar una factura cancelada');

@@ -13,6 +13,8 @@ export type ConnectionStatus = 'ONLINE' | 'OFFLINE' | 'WARNING' | 'UNKNOWN';
 
 export interface RouterCredentials {
   host: string;
+  /** Host alterno: se intenta si `host` no acepta la conexión. */
+  failoverHost?: string | null;
   port: number;
   username: string;
   /** Nunca se almacena en texto plano — ver EncryptionService en el módulo mikrotik. */

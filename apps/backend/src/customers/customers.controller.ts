@@ -4,7 +4,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../rbac/permissions.guard';
 import { CustomersService } from './customers.service';
 import { MikrotikService } from '../mikrotik/mikrotik.service';
-import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto';
+import { RouterApiHooksService } from '../mikrotik/hooks/router-api-hooks.service';
+import { CreateCustomerDto, UpdateCustomerDto, UpdateServiceDto } from './dto/customer.dto';
 import { SuspendCustomerDto } from './dto/suspend-customer.dto';
 
 @ApiTags('customers')
@@ -12,7 +13,11 @@ import { SuspendCustomerDto } from './dto/suspend-customer.dto';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(private customersService: CustomersService, private mikrotik: MikrotikService) {}
+  constructor(
+    private customersService: CustomersService,
+    private mikrotik: MikrotikService,
+    private hooks: RouterApiHooksService,
+  ) {}
 
   @Get()
   @RequirePermissions('clients.view')
@@ -40,13 +45,40 @@ export class CustomersController {
   @Post()
   @RequirePermissions('clients.create')
   async create(@Body() dto: CreateCustomerDto, @Req() req: any) {
-    return this.customersService.create(req.user.organizationId, dto, req.user.sub, req.ip);
+    const customer: any = await this.customersService.create(req.user.organizationId, dto, req.user.sub, req.ip);
+
+    // Alta real en el MikroTik del cliente (si el router tiene "Agregar cliente en MikroTik").
+    const service = customer.services?.[0];
+    let networkAction: { applied: boolean; action?: string; reason?: string } | undefined;
+    if (service?.routerId) {
+      networkAction =
+        dto.pppoeUsername && dto.pppoePassword
+          ? await this.mikrotik.pushCustomerSecret(service.routerId, {
+              username: dto.pppoeUsername,
+              password: dto.pppoePassword,
+              profile: service.plan?.mikrotikProfile ?? null,
+            })
+          : { applied: false, reason: 'Falta el usuario o la contraseña PPPoE; el cliente se creó pero no se agregó al router.' };
+    }
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.created', customer.id);
+    return { ...customer, networkAction };
   }
 
   @Put(':id')
   @RequirePermissions('clients.edit')
   async update(@Param('id') id: string, @Body() dto: UpdateCustomerDto, @Req() req: any) {
-    return this.customersService.update(req.user.organizationId, id, dto, req.user.sub, req.ip);
+    const customer = await this.customersService.update(req.user.organizationId, id, dto, req.user.sub, req.ip);
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.updated', id);
+    return customer;
+  }
+
+  /** Cambiar plan, router o usuario PPPoE del servicio (también lleva clientes existentes a un router). */
+  @Put(':id/service')
+  @RequirePermissions('clients.edit')
+  async updateService(@Param('id') id: string, @Body() dto: UpdateServiceDto, @Req() req: any) {
+    const result = await this.customersService.updateService(req.user.organizationId, id, dto, req.user.sub, req.ip);
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.updated', id);
+    return result;
   }
 
   @Post(':id/suspend')
@@ -62,9 +94,10 @@ export class CustomersController {
       reason: 'El servicio no tiene un router MikroTik ni usuario PPPoE asignado',
     };
     if (service?.routerId && service.pppoeUsername) {
-      networkResult = await this.mikrotik.disableCustomerSession(service.routerId, service.pppoeUsername);
+      networkResult = await this.mikrotik.disableCustomerSession(service.routerId, service.pppoeUsername, service.ipAddress);
     }
 
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.suspended', id);
     return { ...customer, networkAction: networkResult };
   }
 
@@ -82,12 +115,17 @@ export class CustomersController {
       networkResult = await this.mikrotik.enableCustomerSession(service.routerId, service.pppoeUsername);
     }
 
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.activated', id);
     return { ...customer, networkAction: networkResult };
   }
 
   @Delete(':id')
   @RequirePermissions('clients.delete')
   async remove(@Param('id') id: string, @Req() req: any) {
-    return this.customersService.remove(req.user.organizationId, id, req.user.sub, req.ip);
+    // Los datos del evento se toman ANTES de borrar (después ya no existen).
+    const snapshot = await this.hooks.snapshotCustomer(req.user.organizationId, id);
+    const result = await this.customersService.remove(req.user.organizationId, id, req.user.sub, req.ip);
+    void this.hooks.emitCustomerEvent(req.user.organizationId, 'customer.deleted', id, snapshot);
+    return result;
   }
 }

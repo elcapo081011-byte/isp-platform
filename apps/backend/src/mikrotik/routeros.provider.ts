@@ -25,30 +25,51 @@ export class RouterOsProvider implements RouterProvider {
 
   constructor(private crypto: CredentialsEncryptionService) {}
 
+  /**
+   * Abre la conexión probando el host principal y, si no acepta la conexión,
+   * el failover. Un error al ejecutar el comando (ya conectado) NO reintenta
+   * en el otro host: eso es un error real del comando, no de conectividad.
+   */
   private async withConnection<T>(credentials: RouterCredentials, fn: (conn: RouterOSAPI) => Promise<T>): Promise<T> {
-    const conn = new RouterOSAPI({
-      host: credentials.host,
-      port: credentials.port,
-      user: credentials.username,
-      password: this.crypto.decrypt(credentials.encryptedPassword),
-      tls: credentials.useTls ? {} : undefined,
-      timeout: 8,
-    });
-    try {
-      await conn.connect();
-      return await fn(conn);
-    } finally {
-      conn.close();
+    const hosts = [credentials.host, credentials.failoverHost].filter((h): h is string => !!h);
+    let lastError: unknown;
+    for (const host of hosts) {
+      const conn = new RouterOSAPI({
+        host,
+        port: credentials.port,
+        user: credentials.username,
+        password: this.crypto.decrypt(credentials.encryptedPassword),
+        tls: credentials.useTls ? {} : undefined,
+        timeout: 8,
+      });
+      try {
+        await conn.connect();
+      } catch (err) {
+        lastError = err;
+        conn.close();
+        continue;
+      }
+      try {
+        return await fn(conn);
+      } finally {
+        conn.close();
+      }
     }
+    throw lastError ?? new Error('No hay host configurado');
   }
 
   async checkConnection(credentials: RouterCredentials): Promise<ConnectionStatus> {
+    return (await this.testConnection(credentials)).status;
+  }
+
+  /** Igual que checkConnection pero devuelve el motivo legible cuando falla. */
+  async testConnection(credentials: RouterCredentials): Promise<{ status: ConnectionStatus; error?: string }> {
     try {
       await this.withConnection(credentials, (conn) => conn.write('/system/resource/print'));
-      return 'ONLINE';
+      return { status: 'ONLINE' };
     } catch (err) {
       this.logger.warn(`No se pudo conectar a ${credentials.host}: ${(err as Error).message}`);
-      return 'OFFLINE';
+      return { status: 'OFFLINE', error: friendlyConnectionError(err) };
     }
   }
 
@@ -101,6 +122,57 @@ export class RouterOsProvider implements RouterProvider {
     );
   }
 
+  /** Crea el secret PPPoE o, si ya existe con ese nombre, actualiza su clave y perfil. */
+  async upsertPppoeSecret(
+    credentials: RouterCredentials,
+    params: { username: string; password: string; profile: string; disabled?: boolean },
+  ): Promise<'created' | 'updated'> {
+    // Un cliente suspendido que se mueve de router debe quedar deshabilitado en el nuevo,
+    // si no, el traslado le devolvería el servicio sin pagar.
+    const disabled = `=disabled=${params.disabled ? 'yes' : 'no'}`;
+    return this.withConnection(credentials, async (conn) => {
+      const id = await this.findSecretId(conn, params.username);
+      if (id) {
+        await conn.write('/ppp/secret/set', [`=.id=${id}`, `=password=${params.password}`, `=profile=${params.profile}`, disabled]);
+        return 'updated' as const;
+      }
+      await conn.write('/ppp/secret/add', [
+        `=name=${params.username}`,
+        `=password=${params.password}`,
+        `=profile=${params.profile}`,
+        '=service=pppoe',
+        disabled,
+      ]);
+      return 'created' as const;
+    });
+  }
+
+  // -- Corte por address list (lista "moroso") ------------------------------
+
+  /** IP que tiene ahora la sesión PPPoE activa del cliente, o null si no está conectado. */
+  async findActiveAddress(credentials: RouterCredentials, username: string): Promise<string | null> {
+    return this.withConnection(credentials, async (conn) => {
+      const rows = await conn.write('/ppp/active/print', [`?name=${username}`]);
+      return rows[0]?.address ?? null;
+    });
+  }
+
+  async addToAddressList(credentials: RouterCredentials, list: string, address: string, comment: string): Promise<void> {
+    await this.withConnection(credentials, async (conn) => {
+      const existing = await conn.write('/ip/firewall/address-list/print', [`?list=${list}`, `?address=${address}`]);
+      if (existing.length > 0) return; // ya está: no se duplica
+      await conn.write('/ip/firewall/address-list/add', [`=list=${list}`, `=address=${address}`, `=comment=${comment}`]);
+    });
+  }
+
+  /** Quita de la lista todas las entradas con ese comentario (sirve aunque la IP haya cambiado). */
+  async removeFromAddressList(credentials: RouterCredentials, list: string, comment: string): Promise<void> {
+    await this.withConnection(credentials, async (conn) => {
+      const rows = await conn.write('/ip/firewall/address-list/print', [`?list=${list}`, `?comment=${comment}`]);
+      for (const row of rows) await conn.write('/ip/firewall/address-list/remove', [`=.id=${row['.id']}`]);
+    });
+  }
+
   async removePppoeSecret(credentials: RouterCredentials, username: string): Promise<void> {
     await this.withConnection(credentials, async (conn) => {
       const id = await this.findSecretId(conn, username);
@@ -126,6 +198,20 @@ export class RouterOsProvider implements RouterProvider {
     const rows = await conn.write('/ppp/secret/print', [`?name=${username}`]);
     return rows[0]?.['.id'] ?? null;
   }
+}
+
+/** Traduce el error crudo de la librería a algo que el ISP pueda accionar. */
+export function friendlyConnectionError(err: unknown): string {
+  const raw = String((err as any)?.message ?? err ?? '');
+  const code = String((err as any)?.code ?? '');
+  const text = `${code} ${raw}`.toLowerCase();
+  if (text.includes('cannot log in') || text.includes('invalid user')) return 'Usuario o contraseña incorrectos.';
+  if (text.includes('econnrefused')) return 'Conexión rechazada: el servicio API está deshabilitado o el puerto es otro.';
+  if (text.includes('enotfound') || text.includes('getaddrinfo')) return 'No se encontró ese host (revisa la IP o el DDNS).';
+  if (text.includes('timed out') || text.includes('etimedout') || text.includes('timeout'))
+    return 'El router no respondió (tiempo agotado). Revisa la IP, el puerto y que el firewall permita la conexión.';
+  if (text.includes('ehostunreach') || text.includes('enetunreach')) return 'No hay ruta hasta ese host.';
+  return `No se pudo conectar: ${raw.slice(0, 160) || 'error desconocido'}`;
 }
 
 /** RouterOS reporta uptime como "1w2d3h4m5s"; se convierte a segundos. */

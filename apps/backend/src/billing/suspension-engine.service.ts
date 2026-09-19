@@ -4,6 +4,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MikrotikService } from '../mikrotik/mikrotik.service';
+import { RouterApiHooksService } from '../mikrotik/hooks/router-api-hooks.service';
 
 interface SuspensionSettings {
   graceDays: number; // días después del vencimiento antes de suspender
@@ -28,6 +29,7 @@ export class SuspensionEngineService {
     private audit: AuditService,
     private notifications: NotificationsService,
     private mikrotik: MikrotikService,
+    private hooks: RouterApiHooksService,
   ) {}
 
   private async getSettings(organizationId: string): Promise<SuspensionSettings> {
@@ -86,38 +88,66 @@ export class SuspensionEngineService {
 
     const overdueInvoices = await this.prisma.invoice.findMany({
       where: { organizationId, status: 'OVERDUE', dueDate: { lt: cutoff } },
-      include: { customer: true },
+      include: { customer: { include: { services: { include: { router: true } } } } },
       distinct: ['customerId'],
     });
 
     for (const invoice of overdueInvoices) {
       if (invoice.customer.status === 'SUSPENDED') continue;
+      // Si el router del cliente tiene "Facturación - Zona" configurada, ese
+      // cliente lo corta ZoneBillingEngine con las reglas de su zona, no este ciclo global.
+      if (invoice.customer.services.some((s: any) => s.router?.zone)) continue;
 
-      await this.prisma.customer.update({ where: { id: invoice.customerId }, data: { status: 'SUSPENDED' } });
-      await this.prisma.service.updateMany({ where: { customerId: invoice.customerId }, data: { status: 'SUSPENDED' } });
-
-      await this.audit.log({
+      await this.suspendForNonPayment(
         organizationId,
-        action: 'customer.auto_suspend',
-        entityType: 'Customer',
-        entityId: invoice.customerId,
-        after: { reason: `Factura ${invoice.number} vencida hace más de ${settings.graceDays} días` },
-      });
+        invoice.customer,
+        invoice.number,
+        `Factura ${invoice.number} vencida hace más de ${settings.graceDays} días`,
+        true,
+      );
+    }
+  }
 
+  /**
+   * Corte por falta de pago: estado en BD, auditoría, aviso al cliente y corte
+   * real en el router de SU propia organización. Lo usan el ciclo global y el
+   * motor de zonas, para que ambos cortes se comporten exactamente igual.
+   */
+  async suspendForNonPayment(
+    organizationId: string,
+    customer: { id: string; firstName: string; lastName: string; email?: string | null; phone?: string | null },
+    invoiceNumber: string,
+    reason: string,
+    notifyCustomer: boolean,
+  ) {
+    await this.prisma.customer.update({ where: { id: customer.id }, data: { status: 'SUSPENDED' } });
+    await this.prisma.service.updateMany({ where: { customerId: customer.id }, data: { status: 'SUSPENDED' } });
+
+    await this.audit.log({
+      organizationId,
+      action: 'customer.auto_suspend',
+      entityType: 'Customer',
+      entityId: customer.id,
+      after: { reason },
+    });
+
+    if (notifyCustomer) {
       await this.notifications.notify({
         organizationId,
         event: 'customer.suspended',
-        customer: invoice.customer,
-        payload: { invoiceNumber: invoice.number },
+        customer,
+        payload: { invoiceNumber },
       });
-
-      // Corte real en el router del cliente — SIEMPRE el de su propia organización.
-      const service = await this.prisma.service.findFirst({ where: { customerId: invoice.customerId } });
-      if (service?.routerId && service.pppoeUsername) {
-        await this.mikrotik.disableCustomerSession(service.routerId, service.pppoeUsername);
-      }
-
-      this.logger.log(`Cliente ${invoice.customer.firstName} ${invoice.customer.lastName} (org ${organizationId}) suspendido automáticamente.`);
     }
+
+    // Corte real en el router del cliente — SIEMPRE el de su propia organización.
+    const service = await this.prisma.service.findFirst({ where: { customerId: customer.id } });
+    if (service?.routerId && service.pppoeUsername) {
+      await this.mikrotik.disableCustomerSession(service.routerId, service.pppoeUsername, service.ipAddress);
+    }
+
+    void this.hooks.emitCustomerEvent(organizationId, 'customer.suspended', customer.id);
+
+    this.logger.log(`Cliente ${customer.firstName} ${customer.lastName} (org ${organizationId}) suspendido automáticamente.`);
   }
 }

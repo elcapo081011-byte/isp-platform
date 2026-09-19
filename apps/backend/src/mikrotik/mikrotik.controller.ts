@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../rbac/permissions.guard';
 import { MikrotikService } from './mikrotik.service';
-import { CreateRouterDto } from './dto/router.dto';
+import { CreateRouterDto, UpdateRouterDto } from './dto/router.dto';
 
 @ApiTags('mikrotik')
 @ApiBearerAuth()
@@ -18,10 +18,41 @@ export class MikrotikController {
     return this.mikrotik.list(req.user.organizationId);
   }
 
+  @Get(':id')
+  @RequirePermissions('mikrotik.view')
+  get(@Param('id') id: string, @Req() req: any) {
+    return this.mikrotik.get(id, req.user.organizationId);
+  }
+
   @Post()
   @RequirePermissions('mikrotik.manage')
   create(@Body() dto: CreateRouterDto, @Req() req: any) {
     return this.mikrotik.create(req.user.organizationId, dto, req.user.sub, req.ip);
+  }
+
+  @Put(':id')
+  @RequirePermissions('mikrotik.manage')
+  update(@Param('id') id: string, @Body() dto: UpdateRouterDto, @Req() req: any) {
+    return this.mikrotik.update(id, req.user.organizationId, dto, req.user.sub, req.ip);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('mikrotik.manage')
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.mikrotik.remove(id, req.user.organizationId, req.user.sub, req.ip);
+  }
+
+  // El script contiene la clave de API del router: solo quien administra MikroTik.
+  @Get(':id/connection-script')
+  @RequirePermissions('mikrotik.manage')
+  connectionScript(@Param('id') id: string, @Req() req: any) {
+    return this.mikrotik.getConnectionScript(id, req.user.organizationId, req.user.sub, req.ip);
+  }
+
+  @Post(':id/regenerate-credentials')
+  @RequirePermissions('mikrotik.manage')
+  regenerate(@Param('id') id: string, @Req() req: any) {
+    return this.mikrotik.regenerateCredentials(id, req.user.organizationId, req.user.sub, req.ip);
   }
 
   @Post(':id/check-connection')

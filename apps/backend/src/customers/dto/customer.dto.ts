@@ -80,10 +80,43 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   pppoeUsername?: string;
+
+  /** Clave del usuario PPPoE. Se guarda cifrada y se envía al router del cliente. */
+  @IsOptional()
+  @IsString()
+  @MinLength(4)
+  pppoePassword?: string;
+
+  /** Router/zona MikroTik donde vive el servicio del cliente (debe ser de tu cuenta). */
+  @IsOptional()
+  @IsString()
+  routerId?: string;
 }
 
 export class UpdateCustomerDto extends PartialType(CreateCustomerDto) {
   @IsOptional()
   @IsEnum(CustomerStatusDto)
   status?: CustomerStatusDto;
+}
+
+/** Cambio de plan, router o usuario PPPoE del servicio de un cliente (o alta del servicio si no tenía). */
+export class UpdateServiceDto {
+  @IsOptional()
+  @IsString()
+  planId?: string;
+
+  /** Cadena vacía = quitar el router. */
+  @IsOptional()
+  @IsString()
+  routerId?: string;
+
+  @IsOptional()
+  @IsString()
+  pppoeUsername?: string;
+
+  /** Si se omite, se usa la que ya está guardada (cifrada). */
+  @IsOptional()
+  @IsString()
+  @MinLength(4)
+  pppoePassword?: string;
 }
