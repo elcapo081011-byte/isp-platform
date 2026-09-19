@@ -161,15 +161,24 @@ export function PlatformAdminPage() {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => toggle(o.id, o.isActive)} className="text-xs text-signal hover:underline mr-3">
-                        {o.isActive ? 'Suspender' : 'Reactivar'}
-                      </button>
-                      <button onClick={() => startEdit(o)} className="text-xs text-signal hover:underline mr-3">
-                        Editar
-                      </button>
-                      <button onClick={() => remove(o)} className="text-xs text-critical hover:underline">
-                        Eliminar
-                      </button>
+                      {o.slug !== 'platform' && (
+                        <button onClick={() => toggle(o.id, o.isActive)} className="text-xs text-signal hover:underline mr-3">
+                          {o.isActive ? 'Suspender' : 'Reactivar'}
+                        </button>
+                      )}
+                      {o.slug !== 'platform' && (
+                        <button onClick={() => startEdit(o)} className="text-xs text-signal hover:underline mr-3">
+                          Editar
+                        </button>
+                      )}
+                      {o.slug !== 'platform' && (
+                        <button onClick={() => remove(o)} className="text-xs text-critical hover:underline">
+                          Eliminar
+                        </button>
+                      )}
+                      {o.slug === 'platform' && (
+                        <span className="text-xs text-muted">Tu organización interna</span>
+                      )}
                     </>
                   )}
                 </td>
