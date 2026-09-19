@@ -56,6 +56,29 @@ Administrador, Soporte, Técnico, Facturación, Solo monitoreo. Reglas: solo un
 Super administrador puede crear/modificar a otro; no puedes desactivarte ni dejar
 la cuenta sin ningún Super administrador; nadie ve usuarios de otra cuenta.
 
+## MikroTik: agregar un router (como en WispHub)
+
+**MikroTik → Agregar router** abre una pantalla con las mismas 4 pestañas que WispHub:
+
+| Pestaña | Qué hace hoy |
+|---|---|
+| **Información general** | Nombre, IP/DDNS, **failover** (si el principal no responde se prueba el alterno), puertos API/WWW, versión de RouterOS, coordenadas, comentarios, rangos IP y *External ID*. Interruptor **"Agregar cliente en MikroTik"** (real). El **tipo de corte** puede ser *deshabilitar el usuario PPPoE* o *address list moroso* (el script agrega la regla de firewall que bloquea la lista). Los modos de control que aún no existen (Simple Queue, PCQ, HotSpot, IP Bindings, DHCP, IPv6…) aparecen **deshabilitados con la etiqueta "pronto"**. |
+| **Facturación - Zona** | Por router: crear factura (día/hora), día de pago, recordatorio, día de corte, "suspender tras N facturas vencidas", impuestos, y los interruptores de facturas/recordatorios/corte automáticos y correos. **Todo esto lo ejecuta el motor** (`ZoneBillingEngine`, cada hora). Un router sin zona guardada sigue con las reglas globales de la cuenta. |
+| **Script de conexión** | El sistema **genera el usuario y la clave de API** y te da un script para pegar en el terminal del MikroTik (usuario con permisos limitados, servicio API habilitado y, si defines `PLATFORM_PUBLIC_IP`, acceso solo desde esa IP). Botón **Verificar conexión** con el motivo legible si falla, y **Regenerar credenciales**. |
+| **Eventos API personalizados** | Webhooks por router: cuando un cliente de ese router se **agrega, edita, elimina, suspende o reactiva**, se envía un `POST` JSON a las URLs que registres (con botón **Probar** y último resultado). Solo `https` público (443/8443), sin redirecciones, con firma opcional `X-ISP-Signature` (HMAC-SHA256) y sin contraseñas en el cuerpo. |
+
+Flujo completo: **router → cliente → factura → corte**.
+1. Creas el router y pegas el script.
+2. **Nuevo cliente** ahora pide *Router/zona*, usuario y contraseña PPPoE: si el router tiene "Agregar cliente en MikroTik", su usuario PPPoE se crea en el equipo con el **perfil de MikroTik del plan** (el plan debe tener uno definido).
+3. Según la zona, el motor emite las facturas, recuerda el pago y **corta** (deshabilita el PPPoE) al llegar el día de corte.
+4. Al pagar, la factura reactiva al cliente en el router.
+
+> Antes de esta versión, crear un cliente **nunca** le asignaba un router, así que el corte y la reactivación contra MikroTik no se ejecutaban para nadie. Para los clientes que ya existían: **Perfil del cliente → Servicio → Cambiar plan / router** los lleva a un router (crea su usuario PPPoE en el equipo y lo quita del anterior; si están suspendidos queda deshabilitado). Necesitas escribir su contraseña PPPoE una vez, porque antes no se guardaba.
+
+**Corte por address list:** usa la IP fija del servicio o, si no tiene, la de su sesión PPPoE activa al momento del corte; con IP dinámica un cliente que se reconecte con otra IP podría quedar fuera de la lista.
+
+**Sin VPN:** el script no crea una VPN (WispHub sí, con sus propios servidores). El router debe ser alcanzable por IP pública o DDNS desde el servidor de la plataforma.
+
 ## Suscripción a la plataforma ("Mi suscripción")
 
 Cada ISP ve sus planes (Gratis hasta 15 clientes · Básico · Pro · Ilimitado), su

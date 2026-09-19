@@ -38,6 +38,12 @@ maqueta visual.
       catálogo de planes, instrucciones de pago y "Ya pagué"; corrección del menú desactualizado
       (`.js` compilados que tapaban a los `.tsx`) y del arranque sin migraciones.
 
+- [x] **Fase 15** — Router tipo WispHub (4 pestañas, editar/eliminar, failover, script de conexión con
+      credenciales generadas y verificación con motivo), alta de cliente con router + usuario PPPoE
+      en el MikroTik, y motor de facturación/corte por zona (facturas, recordatorios y corte automáticos);
+      reasignar plan/router de clientes existentes, corte por address list, y Eventos API (webhooks
+      por router con protección SSRF).
+
 ## Brecha frente a WispHub (lo que aún falta, verificado en wisphub.net)
 
 Prioridad sugerida, de mayor a menor impacto para un ISP que quiera migrar:
@@ -47,12 +53,13 @@ Prioridad sugerida, de mayor a menor impacto para un ISP que quiera migrar:
    suscripción SaaS (WispHub integra Stripe y pasarelas locales por país).
 3. **Notificaciones SMS/WhatsApp** (recordatorios de pago, confirmaciones, avisos de corte).
 4. **Zonas y permisos de staff por zona/router** (WispHub limita qué routers/clientes ve cada empleado).
-5. **Importar clientes y planes desde el MikroTik** y modos de control adicionales
-   (Simple Queue, PCQ + Address List, Hotspot/fichas, DHCP, IP binding — hoy solo PPPoE).
+5. **VPN hacia la plataforma** (routers sin IP pública), **importar clientes y planes desde el MikroTik**,
+   y modos de control adicionales (Simple Queue, PCQ + Address List,
+   Hotspot/fichas, DHCP, IP binding — hoy solo PPPoE).
 6. **Planes de pago personalizados y servicios adicionales** (un solo pago, fechas inicio/fin, TV/telefonía).
 7. **Plantillas editables** de factura/contrato con firma digital, y facturación electrónica por país.
 8. **Actualización masiva** de clientes, IPv6, log de acciones por cliente/factura.
-9. **API pública documentada** para integraciones (hoy hay API Keys, falta el catálogo de endpoints).
+9. **API pública documentada** para integraciones (hoy hay API Keys y webhooks por router, falta el catálogo de endpoints).
 
 ## Lo que queda fuera de este ciclo, honestamente
 

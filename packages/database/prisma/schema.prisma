@@ -399,15 +399,59 @@ model Router {
   encryptedPassword String
   useTls            Boolean      @default(false)
   location          String?
+
+  // --- Configuración tipo WispHub (pestaña "Información general") ----------
+  failoverHost        String?  // IP/DDNS alterna: si el host principal no responde se intenta esta
+  wwwPort             Int?
+  lanInterface        String?
+  ipRanges            String?  // un rango CIDR por línea (informativo por ahora)
+  comments            String?
+  latitude            Float?
+  longitude           Float?
+  routerOsVersion     String   @default("6") // "6" | "7"
+  externalId          String?
+  // true = las credenciales de API las generó el sistema (se entregan en el
+  // "Script de conexión" para pegarlo en el MikroTik). false = el ISP las escribió.
+  useConnectionScript Boolean  @default(false)
+  // Si está activo, al crear un cliente en este router se crea su PPPoE secret.
+  addClientsToRouter  Boolean  @default(true)
+  cutMode             String   @default("PPPOE_SECRET") // PPPOE_SECRET (por ahora el único implementado)
+  // Pestaña "Facturación - Zona" (ver mikrotik/zone-settings.ts). null = el
+  // router usa las reglas globales de la cuenta (comportamiento anterior).
+  zone                Json?
+
   status            RouterStatus @default(UNKNOWN)
   lastCheckedAt     DateTime?
   lastError         String?
   isDemo            Boolean      @default(false)
   services          Service[]
+  apiHooks          RouterApiHook[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
   @@index([organizationId])
+}
+
+// "Eventos API personalizados" de un router (pestaña de WispHub): cuando un cliente
+// de ese router cambia de estado, la plataforma avisa por HTTPS a la URL del ISP.
+model RouterApiHook {
+  id             String   @id @default(uuid())
+  organizationId String
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  platform       String   // nombre visible (ej. "Mi CRM")
+  url            String   // solo https y a direcciones públicas (ver hooks/safe-http.ts)
+  encryptedSecret String? // secreto para firmar (HMAC-SHA256); cifrado en reposo
+  enabled        Boolean  @default(true)
+  events         String[] // customer.created | updated | deleted | suspended | activated
+  lastAt         DateTime?
+  lastStatus     Int?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([routerId])
 }
 
 // FASE 5 — model Olt { ... }, model PonPort { ... }, model Onu { ... }
