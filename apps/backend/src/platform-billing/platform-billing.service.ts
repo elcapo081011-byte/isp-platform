@@ -92,6 +92,59 @@ export class PlatformBillingService {
     };
   }
 
+  // Toda la tabla de precios, para mostrarla completa en "Mi suscripción"
+  // (hoy solo se veía el plan actual y el siguiente, no todos los planes).
+  listTiers() {
+    return PLATFORM_TIERS.map((t) => ({
+      name: t.name,
+      maxClients: Number.isFinite(t.maxClients) ? t.maxClients : null,
+      monthlyPrice: t.monthlyPrice,
+    }));
+  }
+
+  // El dueño del ISP no puede pagar solo (no hay gateway conectado), pero sí
+  // puede avisar que quiere comprar/subir de plan. Esto queda registrado en
+  // auditoría (visible para ti en el panel de plataforma) y te llega un
+  // correo si tu cuenta de plataforma tiene email real.
+  async requestUpgrade(organizationId: string, userId: string, tierName: string) {
+    const tier = PLATFORM_TIERS.find((t) => t.name === tierName);
+    if (!tier) throw new BadRequestException('Ese plan no existe.');
+
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org) throw new NotFoundException('Organización no encontrada');
+
+    await this.audit.log({
+      organizationId,
+      userId,
+      action: 'platform.upgrade_requested',
+      entityType: 'Organization',
+      entityId: organizationId,
+      after: { tier: tier.name, monthlyPrice: tier.monthlyPrice },
+    });
+
+    const platformAdmin = await this.prisma.user.findFirst({ where: { isPlatformAdmin: true }, orderBy: { createdAt: 'asc' } });
+    if (platformAdmin) {
+      await this.notifications.notify({
+        organizationId,
+        event: 'platform.upgrade_requested',
+        customer: { email: platformAdmin.email, firstName: platformAdmin.firstName, lastName: platformAdmin.lastName },
+        payload: { message: `${org.name} quiere pasarse al plan ${tier.name} (${org.platformCurrency} ${tier.monthlyPrice}/mes). Contáctalos para coordinar el pago.` },
+      });
+    }
+
+    return { requested: true, tier: tier.name };
+  }
+
+  // Panel del dueño de la plataforma: qué ISP han pedido subir de plan.
+  async listUpgradeRequests() {
+    return this.prisma.auditLog.findMany({
+      where: { action: 'platform.upgrade_requested' },
+      include: { organization: { select: { name: true, slug: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
   async listInvoicesForOrg(organizationId: string) {
     return this.prisma.platformInvoice.findMany({
       where: { organizationId },

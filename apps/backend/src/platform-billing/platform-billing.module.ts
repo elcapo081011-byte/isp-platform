@@ -19,6 +19,12 @@ class MarkPaidDto {
   notes?: string;
 }
 
+class UpgradeRequestDto {
+  @ApiProperty({ example: 'BASIC', description: 'Nombre del plan que el ISP quiere comprar.' })
+  @IsString()
+  tier!: string;
+}
+
 /**
  * Vista del dueño de cada ISP sobre SU PROPIA suscripción a la plataforma:
  * cuántos clientes lleva, cuánto le toca pagar, y sus facturas. No requiere
@@ -41,6 +47,16 @@ export class SubscriptionController {
   listInvoices(@Req() req: any) {
     return this.platformBilling.listInvoicesForOrg(req.user.organizationId);
   }
+
+  @Get('tiers')
+  listTiers() {
+    return this.platformBilling.listTiers();
+  }
+
+  @Post('upgrade-request')
+  requestUpgrade(@Body() dto: UpgradeRequestDto, @Req() req: any) {
+    return this.platformBilling.requestUpgrade(req.user.organizationId, req.user.sub, dto.tier);
+  }
 }
 
 /**
@@ -58,6 +74,11 @@ export class PlatformBillingController {
   @Get('invoices')
   listAll(@Query('status') status?: string) {
     return this.platformBilling.listAllInvoices(status);
+  }
+
+  @Get('upgrade-requests')
+  listUpgradeRequests() {
+    return this.platformBilling.listUpgradeRequests();
   }
 
   @Get('organizations/:id/invoices')

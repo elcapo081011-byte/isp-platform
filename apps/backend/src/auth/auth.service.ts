@@ -212,4 +212,16 @@ export class AuthService {
   async logout(userId: string) {
     await this.prisma.user.update({ where: { id: userId }, data: { refreshTokenHash: null } });
   }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) throw new UnauthorizedException('La contraseña actual no es correcta.');
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash, refreshTokenHash: null } });
+    await this.audit.log({ organizationId: user.organizationId, userId, action: 'auth.change_password', entityType: 'User', entityId: userId });
+
+    return { message: 'Contraseña actualizada. Vuelve a iniciar sesión.' };
+  }
 }

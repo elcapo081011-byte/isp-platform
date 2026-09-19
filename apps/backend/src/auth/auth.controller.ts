@@ -2,7 +2,7 @@ import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
+import { LoginDto, RefreshTokenDto, ChangePasswordDto } from './dto/auth.dto';
 import { RegisterOrganizationDto } from './dto/register-organization.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request } from 'express';
@@ -44,5 +44,12 @@ export class AuthController {
   async logout(@Req() req: any) {
     await this.authService.logout(req.user.sub);
     return { message: 'Sesión cerrada' };
+  }
+
+  @Post('change-password')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: any) {
+    return this.authService.changePassword(req.user.sub, dto.currentPassword, dto.newPassword);
   }
 }
