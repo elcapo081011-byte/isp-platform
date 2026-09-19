@@ -49,6 +49,9 @@ class PlatformService {
   async setOrganizationActive(id: string, isActive: boolean, platformAdminUserId: string) {
     const org = await this.prisma.organization.findUnique({ where: { id } });
     if (!org) throw new NotFoundException('Organización no encontrada');
+    if (org.slug === 'platform' && !isActive) {
+      throw new ForbiddenException('No se puede suspender la organización interna de la plataforma — ahí vive tu propio acceso.');
+    }
 
     const updated = await this.prisma.organization.update({ where: { id }, data: { isActive } });
     await this.audit.log({
